@@ -1,110 +1,239 @@
+/* ============================================================
+   Google Maps Scraper - Web UI
+   风格：朴素、克制、高可读性
+   字体：Georgia + 系统无衬线，避免 Inter/Roboto/Arial
+   ============================================================ */
+
+/* --- 设计令牌 --- */
 :root {
-    --color-background: #f9f9f9;
-    --color-surface: #ffffff;
-    --color-text: #333333;
-    --color-text-light: #666666;
-    --color-border: #e0e0e0;
-    --color-primary: #4a4a4a;
-    --color-primary-light: #5a5a5a;
-    --color-success: #43a047;
-    --color-warning: #fdd835;
-    --color-error: #e53935;
-    --color-github-star: #f1e05a;
-    --color-sponsor: #ea4aaa;
-    --color-sponsor: #4a4a4a;
-    --color-sponsor-hover: #5a5a5a;
+    /* 背景 & 表面 */
+    --bg:        #f5f4f0;   /* 页面背景：暖灰 */
+    --surface:   #ffffff;
+    --surface-2: #eeedea;   /* 次级表面：折叠区、hover */
+
+    /* 文字 */
+    --text:      #1a1a1a;
+    --text-2:    #5c5c5c;   /* 次要文字 */
+    --text-3:    #999;      /* 占位、提示 */
+
+    /* 边框 */
+    --border:    #d9d6d0;
+
+    /* 交互色 — 沉稳，不刺眼 */
+    --action:       #2d6a4f;   /* 主操作：深绿 */
+    --action-hover: #1b4332;
+
+    /* 语义色 */
+    --ok:       #2d6a4f;
+    --warn:     #b8860b;     /* 暗金 */
+    --err:      #a83232;     /* 暗红 */
+
+    /* 间距 */
+    --sp-xs: 4px;
+    --sp-sm: 8px;
+    --sp-md: 16px;
+    --sp-lg: 24px;
+    --sp-xl: 32px;
+
+    /* 字号 */
+    --fs-sm:  13px;
+    --fs-base: 14px;
+    --fs-lg:  18px;
+    --fs-xl:  22px;
+}
+
+/* --- 基础重置 --- */
+* {
+    box-sizing: border-box;
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
-    line-height: 1.5;
-    color: var(--color-text);
-    background-color: var(--color-background);
+    font-family: Georgia, "Noto Serif SC", "Songti SC", serif;
+    line-height: 1.6;
+    color: var(--text);
+    background: var(--bg);
     margin: 0;
-    padding: 0;
     height: 100vh;
     display: flex;
     flex-direction: column;
+    -webkit-font-smoothing: antialiased;
 }
 
+/* 表单元素用无衬线，Georgia 在 input 里不好看 */
+input, textarea, button, select {
+    font-family: -apple-system, BlinkMacSystemFont, "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", sans-serif;
+}
+
+/* --- 布局 --- */
 .app-container {
     flex: 1;
     display: flex;
     flex-direction: column;
 }
 
+/* --- 头部 --- */
 header {
-    background-color: var(--color-surface);
-    padding: 24px 32px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    background: var(--surface);
+    padding: var(--sp-lg) var(--sp-xl);
+    border-bottom: 1px solid var(--border);
 }
 
 h1 {
-    font-size: 24px;
-    font-weight: 500;
-    color: var(--color-primary);
-    margin: 0 0 16px 0;
+    font-size: var(--fs-xl);
+    font-weight: 700;
+    color: var(--text);
+    margin: 0 0 var(--sp-sm) 0;
+    letter-spacing: -0.02em;
 }
 
+/* --- 导航 / API 文档链接 --- */
+nav {
+    margin-bottom: var(--sp-md);
+}
+
+nav a {
+    color: var(--action);
+    text-decoration: none;
+    font-size: var(--fs-sm);
+    font-family: -apple-system, BlinkMacSystemFont, "Noto Sans SC", "PingFang SC", sans-serif;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.15s;
+}
+
+nav a:hover {
+    border-bottom-color: var(--action);
+}
+
+/* --- GitHub 区域 --- */
 .github-section {
     display: flex;
     align-items: center;
-    margin-top: 16px;
+    gap: var(--sp-sm);
+    margin-top: var(--sp-sm);
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+}
+
+.github-section p {
+    margin: 0;
 }
 
 .github-button {
     display: inline-flex;
     align-items: center;
-    background-color: var(--color-sponsor);
-    color: white;
-    border: 1px solid var(--color-border);
-    padding: 10px 16px;
-    margin-left: 16px;
-    border-radius: 4px;
-    font-size: 14px;
+    gap: var(--sp-xs);
+    padding: var(--sp-xs) var(--sp-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
     text-decoration: none;
-    transition: background-color 0.2s, border-color 0.2s;
+    font-size: var(--fs-sm);
+    font-family: -apple-system, BlinkMacSystemFont, "Noto Sans SC", "PingFang SC", sans-serif;
+    transition: border-color 0.15s, background 0.15s;
 }
 
 .github-button:hover {
-    background-color: var(--color-sponsor);
-    border-color: var(--color-primary);
+    background: var(--surface-2);
+    border-color: var(--text-3);
 }
 
 .github-button svg {
-    margin-right: 8px;
+    width: 14px;
+    height: 14px;
 }
 
 .github-button svg path {
-    fill: var(--color-github-star);
+    fill: var(--text-3);
 }
 
+/* --- 赞助区域 --- */
+.sponsor-section {
+    position: relative;
+    margin-top: var(--sp-md);
+    padding: var(--sp-md);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+}
+
+.sponsor-close {
+    position: absolute;
+    top: var(--sp-xs);
+    right: var(--sp-xs);
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: transparent;
+    color: var(--text-3);
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.sponsor-close:hover {
+    color: var(--text);
+}
+
+.sponsor-text {
+    margin: 0 0 var(--sp-sm) 0;
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+    padding-right: var(--sp-lg);
+}
+
+.sponsor-button {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-xs);
+    padding: var(--sp-xs) var(--sp-sm);
+    background: var(--action);
+    color: #fff;
+    text-decoration: none;
+    font-size: var(--fs-sm);
+    font-family: -apple-system, BlinkMacSystemFont, "Noto Sans SC", "PingFang SC", sans-serif;
+    transition: background 0.15s;
+}
+
+.sponsor-button:hover {
+    background: var(--action-hover);
+}
+
+.sponsor-button svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* --- 主体：侧栏 + 内容 --- */
 main {
     flex: 1;
     display: flex;
     overflow: hidden;
 }
 
+/* 侧栏 — 表单 */
 .sidebar {
-    width: 320px;
-    background-color: var(--color-surface);
-    padding: 24px;
+    width: 340px;
+    background: var(--surface);
+    padding: var(--sp-lg);
     overflow-y: auto;
-    border-right: 1px solid var(--color-border);
-    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+    border-right: 1px solid var(--border);
 }
 
+/* 右侧 — 任务列表 */
 .content {
     flex: 1;
-    padding: 24px 32px;
+    padding: var(--sp-lg) var(--sp-xl);
     overflow-y: auto;
-    background-color: var(--color-background);
+    background: var(--bg);
 }
 
+/* --- 表单 --- */
 form {
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: var(--sp-lg);
 }
 
 fieldset {
@@ -114,148 +243,283 @@ fieldset {
 }
 
 legend {
-    font-weight: 500;
-    margin-bottom: 16px;
-    color: var(--color-primary);
+    font-weight: 700;
+    font-size: var(--fs-base);
+    margin-bottom: var(--sp-md);
+    color: var(--text);
 }
 
 .form-group {
-    margin-bottom: 20px;
+    margin-bottom: var(--sp-md);
+}
+
+.form-group:last-child {
+    margin-bottom: 0;
 }
 
 label {
     display: block;
-    margin-bottom: 8px;
-    color: var(--color-text-light);
+    margin-bottom: var(--sp-xs);
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+    font-family: -apple-system, BlinkMacSystemFont, "Noto Sans SC", "PingFang SC", sans-serif;
 }
 
+/* 输入框 — 无圆角，朴素边框 */
 input[type="text"],
 input[type="number"],
 textarea {
     width: 100%;
-    padding: 10px 12px;
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    font-size: 14px;
-    box-sizing: border-box;
+    padding: var(--sp-sm) 10px;
+    border: 1px solid var(--border);
+    border-radius: 0;
+    font-size: var(--fs-base);
+    background: var(--surface);
+    color: var(--text);
+    transition: border-color 0.15s;
 }
 
-button {
-    background-color: var(--color-primary);
-    color: white;
+input[type="text"]:focus,
+input[type="number"]:focus,
+textarea:focus {
+    outline: none;
+    border-color: var(--action);
+}
+
+/* checkbox 行 */
+.form-group.checkbox {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-sm);
+}
+
+.form-group.checkbox label {
+    margin-bottom: 0;
+}
+
+/* 文本提示 */
+.text-muted {
+    font-size: var(--fs-sm);
+    color: var(--text-3);
+    margin-top: var(--sp-xs);
+}
+
+.text-muted p {
+    margin: var(--sp-xs) 0;
+}
+
+/* --- 参数说明展开按钮 --- */
+.help-toggle {
+    display: inline-block;
+    font-size: var(--fs-sm);
+    color: var(--action);
+    text-decoration: none;
+    margin-top: var(--sp-xs);
+    border-bottom: 1px dashed var(--action);
+    font-family: -apple-system, BlinkMacSystemFont, "Noto Sans SC", "PingFang SC", sans-serif;
+}
+
+.help-toggle:hover {
+    color: var(--action-hover);
+}
+
+/* --- 参数说明面板 --- */
+.help-panel {
+    margin-top: var(--sp-sm);
+    padding: var(--sp-sm);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+}
+
+.help-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--fs-sm);
+    font-family: -apple-system, BlinkMacSystemFont, "Noto Sans SC", "PingFang SC", sans-serif;
+}
+
+.help-table th,
+.help-table td {
+    padding: var(--sp-xs) var(--sp-sm);
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+}
+
+.help-table th {
+    font-weight: 600;
+    color: var(--text-2);
+    background: transparent;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.help-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* 提交按钮 — 方正，无圆角 */
+button[type="submit"] {
+    background: var(--action);
+    color: #fff;
     border: none;
-    padding: 12px 20px;
-    border-radius: 4px;
+    padding: 10px var(--sp-md);
+    border-radius: 0;
     cursor: pointer;
-    font-size: 14px;
-    transition: background-color 0.2s;
+    font-size: var(--fs-base);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    transition: background 0.15s;
+    width: 100%;
 }
 
-button:hover {
-    background-color: var(--color-primary-light);
+button[type="submit"]:hover {
+    background: var(--action-hover);
 }
 
+/* --- 可折叠区域 --- */
+.expandable-section summary {
+    cursor: pointer;
+    padding: var(--sp-sm) var(--sp-md);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 0;
+    font-size: var(--fs-sm);
+    font-family: -apple-system, BlinkMacSystemFont, "Noto Sans SC", "PingFang SC", sans-serif;
+    color: var(--text);
+    font-weight: 500;
+    list-style: none;          /* 隐藏默认三角 */
+    user-select: none;
+}
+
+.expandable-section summary::-webkit-details-marker {
+    display: none;
+}
+
+/* 手动加展开指示符 */
+.expandable-section summary::before {
+    content: "+ ";
+    font-weight: 700;
+    font-family: monospace;
+}
+
+.expandable-section[open] summary::before {
+    content: "- ";
+}
+
+.expandable-section[open] summary {
+    border-bottom: none;
+}
+
+/* --- 任务列表 --- */
 table {
     width: 100%;
-    border-collapse: separate;
-    border-spacing: 0;
-    background-color: var(--color-surface);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    border-radius: 4px;
-    overflow: hidden;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--border);
 }
 
 th, td {
     text-align: left;
-    padding: 16px;
-    border-bottom: 1px solid var(--color-border);
+    padding: var(--sp-sm) var(--sp-md);
+    border-bottom: 1px solid var(--border);
+    font-size: var(--fs-sm);
+    font-family: -apple-system, BlinkMacSystemFont, "Noto Sans SC", "PingFang SC", sans-serif;
 }
 
 th {
-    font-weight: 500;
-    color: var(--color-primary);
-    background-color: var(--color-surface);
+    font-weight: 600;
+    color: var(--text-2);
+    background: var(--surface-2);
+    text-transform: uppercase;
+    font-size: var(--fs-sm);
+    letter-spacing: 0.04em;
 }
 
+/* 表格最后一行无底边框 */
+tbody tr:last-child td {
+    border-bottom: none;
+}
+
+tbody tr:hover {
+    background: var(--surface-2);
+}
+
+/* --- 状态标签 — 无圆角药丸，纯文字色 --- */
 .status-indicator {
     display: inline-block;
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 500;
+    padding: 2px var(--sp-sm);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
 }
 
 .status-ok {
-    background-color: var(--color-success);
-    color: white;
+    color: var(--ok);
+    background: transparent;
 }
 
-.status-pending {
-    background-color: var(--color-warning);
-    color: var(--color-text);
-}
-
+.status-pending,
 .status-working {
-    background-color: var(--color-warning);
-    color: var(--color-text);
+    color: var(--warn);
+    background: transparent;
 }
 
-.status-failed {
-    background-color: var(--color-error);
-    color: var(--color-text);
-}
-
+.status-failed,
 .status-error {
-    background-color: var(--color-error);
-    color: white;
+    color: var(--err);
+    background: transparent;
 }
 
-.download-button, .delete-button {
-    padding: 6px 12px;
-    border-radius: 4px;
-    font-size: 12px;
+/* --- 操作按钮 --- */
+.download-button,
+.delete-button {
+    padding: var(--sp-xs) var(--sp-sm);
+    font-size: var(--fs-sm);
     text-decoration: none;
-    color: white;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    font-family: -apple-system, BlinkMacSystemFont, "Noto Sans SC", "PingFang SC", sans-serif;
+    transition: background 0.15s, border-color 0.15s;
+    border-radius: 0;
 }
 
-.download-button {
-    background-color: var(--color-success);
+.download-button:hover {
+    background: var(--ok);
+    color: #fff;
+    border-color: var(--ok);
 }
 
 .delete-button {
-    background-color: var(--color-error);
+    border: none;
+    background: transparent;
+    color: var(--err);
 }
 
+.delete-button:hover {
+    background: var(--err);
+    color: #fff;
+}
+
+/* --- 错误消息 --- */
 .error-message {
     display: none;
-    background-color: #ffebee;
-    border: 1px solid var(--color-error);
-    color: var(--color-error);
-    padding: 12px 16px;
-    border-radius: 4px;
-    margin-bottom: 20px;
-    font-size: 14px;
+    background: #fde8e8;
+    border-top: 2px solid var(--err);
+    color: var(--err);
+    padding: var(--sp-sm) var(--sp-md);
+    margin-bottom: var(--sp-md);
+    font-size: var(--fs-sm);
 }
 
 .error-message:not(:empty) {
     display: block;
 }
 
-.expandable-section summary {
-    cursor: pointer;
-    padding: 12px 16px;
-    background-color: var(--color-background);
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    color: var(--color-text);
-}
-
-.expandable-section[open] summary {
-    border-bottom: none;
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-}
-
+/* --- 响应式 --- */
 @media (max-width: 768px) {
     main {
         flex-direction: column;
@@ -264,94 +528,14 @@ th {
     .sidebar {
         width: 100%;
         border-right: none;
-        border-bottom: 1px solid var(--color-border);
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        border-bottom: 1px solid var(--border);
     }
 
     .content {
-        padding: 20px;
+        padding: var(--sp-md);
     }
-}
 
-.sponsor-section {
-    position: relative;
-    margin-top: 24px;
-    padding: 16px;
-    background-color: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-}
-
-.sponsor-close {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 20px;
-    height: 20px;
-    border: none;
-    background-color: transparent;
-    color: var(--color-text-light);
-    font-size: 16px;
-    line-height: 1;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: color 0.2s;
-}
-
-.sponsor-close:hover {
-    color: var(--color-text);
-}
-
-.sponsor-text {
-    margin: 0 0 12px 0;
-    font-size: 14px;
-    color: var(--color-text);
-    padding-right: 20px; /* Make space for the close button */
-}
-
-.sponsor-button {
-    display: inline-flex;
-    align-items: center;
-    background-color: var(--color-sponsor);
-    color: white;
-    border: none;
-    padding: 10px 16px;
-    border-radius: 4px;
-    font-size: 14px;
-    text-decoration: none;
-    transition: background-color 0.2s;
-}
-
-.sponsor-button:hover {
-    background-color: var(--color-sponsor-hover);
-}
-
-.sponsor-button svg {
-    margin-right: 8px;
-}
-
-nav {
-    margin-bottom: 16px;
-    padding: 8px 0;
-}
-
-nav a {
-    color: white;
-    text-decoration: none;
-    font-size: 16px;
-    font-weight: 500;
-    padding: 8px 16px;
-    background-color: var(--color-primary);
-    border: 1px solid var(--color-primary);
-    border-radius: 4px;
-    transition: all 0.2s ease;
-    display: inline-block;
-}
-
-nav a:hover {
-    background-color: var(--color-primary-light);
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    header {
+        padding: var(--sp-md);
+    }
 }
