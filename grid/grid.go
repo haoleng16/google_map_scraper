@@ -22,6 +22,11 @@ type BoundingBox struct {
 	MaxLon float64
 }
 
+// Contains reports whether the latitude and longitude are inside the bounding box.
+func (b BoundingBox) Contains(lat, lon float64) bool {
+	return lat >= b.MinLat && lat <= b.MaxLat && lon >= b.MinLon && lon <= b.MaxLon
+}
+
 // ParseBoundingBox parses a string with format "minLat,minLon,maxLat,maxLon".
 // Example: "40.30,-3.80,40.50,-3.60"
 func ParseBoundingBox(s string) (BoundingBox, error) {

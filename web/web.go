@@ -168,7 +168,7 @@ type formData struct {
 	Name     string
 	MaxTime  string
 	Keywords []string
-	Language string
+	Location string
 	Zoom     int
 	FastMode bool
 	Radius   int
@@ -229,9 +229,9 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 
 	data := formData{
 		Name:     "",
-		MaxTime:  "10m",
+		MaxTime:  "2h",
 		Keywords: []string{},
-		Language: "en",
+		Location: "",
 		Zoom:     15,
 		FastMode: false,
 		Radius:   10000,
@@ -300,10 +300,11 @@ func (s *Server) scrape(w http.ResponseWriter, r *http.Request) {
 		newJob.Data.Keywords = append(newJob.Data.Keywords, k)
 	}
 
-	newJob.Data.Lang = r.Form.Get("lang")
+	newJob.Data.SetDefaultLang()
+	newJob.Data.Location = strings.TrimSpace(r.Form.Get("location"))
 
-	newJob.Data.Zoom, err = strconv.Atoi(r.Form.Get("zoom"))
-	if err != nil {
+	newJob.Data.Zoom, err = parseIntDefault(r.Form.Get("zoom"), 15)
+	if err != nil || newJob.Data.Zoom < 1 {
 		http.Error(w, "invalid zoom", http.StatusUnprocessableEntity)
 
 		return
@@ -313,7 +314,7 @@ func (s *Server) scrape(w http.ResponseWriter, r *http.Request) {
 		newJob.Data.FastMode = true
 	}
 
-	newJob.Data.Radius, err = strconv.Atoi(r.Form.Get("radius"))
+	newJob.Data.Radius, err = parseIntDefault(r.Form.Get("radius"), 10000)
 	if err != nil {
 		http.Error(w, "invalid radius", http.StatusUnprocessableEntity)
 
@@ -431,6 +432,14 @@ func (s *Server) download(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func parseIntDefault(value string, defaultValue int) (int, error) {
+	if strings.TrimSpace(value) == "" {
+		return defaultValue, nil
+	}
+
+	return strconv.Atoi(value)
+}
+
 func (s *Server) delete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -505,6 +514,7 @@ func (s *Server) apiScrape(w http.ResponseWriter, r *http.Request) {
 
 	// convert to seconds
 	newJob.Data.MaxTime *= time.Second
+	newJob.Data.SetDefaultLang()
 
 	err = newJob.Validate()
 	if err != nil {

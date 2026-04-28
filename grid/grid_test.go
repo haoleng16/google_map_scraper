@@ -87,3 +87,26 @@ func TestGenerateCellsAndEstimateCellCountNearPoles(t *testing.T) {
 		t.Fatalf("expected EstimateCellCount=%d to match generated cells=%d", gotCount, len(gotCells))
 	}
 }
+
+func TestBoundingBoxContains(t *testing.T) {
+	t.Parallel()
+
+	bbox := grid.BoundingBox{
+		MinLat: 10,
+		MinLon: 20,
+		MaxLat: 30,
+		MaxLon: 40,
+	}
+
+	if !bbox.Contains(20, 30) {
+		t.Fatal("expected point to be inside bounding box")
+	}
+
+	if bbox.Contains(31, 30) {
+		t.Fatal("expected point outside latitude range")
+	}
+
+	if bbox.Contains(20, 41) {
+		t.Fatal("expected point outside longitude range")
+	}
+}

@@ -14,14 +14,22 @@ import (
 
 	"github.com/gosom/google-maps-scraper/deduper"
 	"github.com/gosom/google-maps-scraper/exiter"
+	"github.com/gosom/google-maps-scraper/geocode"
+	"github.com/gosom/google-maps-scraper/geodata"
+	"github.com/gosom/google-maps-scraper/grid"
 	"github.com/gosom/google-maps-scraper/runner"
+	"github.com/gosom/google-maps-scraper/searchterms"
 	"github.com/gosom/google-maps-scraper/tlmt"
 	"github.com/gosom/google-maps-scraper/web"
 	"github.com/gosom/google-maps-scraper/web/sqlite"
 	"github.com/gosom/scrapemate"
-	"github.com/gosom/scrapemate/adapters/writers/csvwriter"
 	"github.com/gosom/scrapemate/scrapemateapp"
 	"golang.org/x/sync/errgroup"
+)
+
+const (
+	cityDatabasePath = "geodata/cities.db"
+	defaultCityLimit = 80
 )
 
 type webrunner struct {
@@ -155,7 +163,116 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 		_ = outfile.Close()
 	}()
 
-	mate, err := w.setupMate(ctx, outfile, job)
+	var coords string
+	if job.Data.Lat != "" && job.Data.Lon != "" {
+		coords = job.Data.Lat + "," + job.Data.Lon
+	}
+
+	dedup := deduper.New()
+	exitMonitor := exiter.New()
+	keywords := searchterms.Expand(job.Data.Keywords)
+
+	var seedJobs []scrapemate.IJob
+	var resultFilter *grid.BoundingBox
+	if strings.TrimSpace(job.Data.Location) != "" {
+		if country, ok := geodata.ResolveCountry(job.Data.Location); ok {
+			seedJobs, err = createCountrySeedJobs(job, country, dedup, exitMonitor, w.cfg.ExtraReviews)
+			resultFilter = &country.BBox
+		} else if resolved, resolveErr := geocode.Resolve(ctx, job.Data.Location); resolveErr != nil {
+			log.Printf("job %s could not resolve location %q: %v; falling back to location-qualified search", job.ID, job.Data.Location, resolveErr)
+			fallbackKeywords := searchterms.ExpandForLocation(job.Data.Keywords, job.Data.Location)
+			langCode := langForLocation(job.Data.Lang, job.Data.Location)
+			seedJobs, err = runner.CreateSeedJobs(
+				false,
+				langCode,
+				strings.NewReader(locationQualifiedQueries(fallbackKeywords, job.Data.Location)),
+				job.Data.Depth,
+				job.Data.Email,
+				"",
+				job.Data.Zoom,
+				10000,
+				dedup,
+				exitMonitor,
+				w.cfg.ExtraReviews || job.Data.ExtraReviews,
+			)
+		} else if resolved.IsCountry && resolved.CountryCode != "" {
+			country, countryErr := countryFromCities(ctx, resolved)
+			if countryErr != nil {
+				log.Printf("job %s could not build city coverage for %q (%s): %v; falling back to country bbox grid", job.ID, resolved.DisplayName, resolved.CountryCode, countryErr)
+				resultFilter = &resolved.BoundingBox
+				cellKm := gridCellSizeFor(resolved.BoundingBox)
+				gridKeywords := searchterms.ExpandForLocation(job.Data.Keywords, resolved.DisplayName)
+				langCode := langForLocation(job.Data.Lang, resolved.DisplayName)
+
+				seedJobs, err = runner.CreateGridSeedJobs(
+					langCode,
+					strings.NewReader(locationQualifiedQueries(gridKeywords, resolved.DisplayName)),
+					job.Data.Depth,
+					job.Data.Email,
+					resolved.BoundingBox,
+					cellKm,
+					job.Data.Zoom,
+					dedup,
+					exitMonitor,
+					w.cfg.ExtraReviews || job.Data.ExtraReviews,
+				)
+			} else {
+				seedJobs, err = createCountrySeedJobs(job, country, dedup, exitMonitor, w.cfg.ExtraReviews)
+				resultFilter = &country.BBox
+			}
+		} else {
+			resultFilter = &resolved.BoundingBox
+			cellKm := gridCellSizeFor(resolved.BoundingBox)
+			log.Printf("job %s resolved location %q to %q; grid cell %.1f km", job.ID, job.Data.Location, resolved.DisplayName, cellKm)
+			gridKeywords := searchterms.ExpandForLocation(job.Data.Keywords, resolved.DisplayName)
+			langCode := langForLocation(job.Data.Lang, resolved.DisplayName)
+
+			seedJobs, err = runner.CreateGridSeedJobs(
+				langCode,
+				strings.NewReader(locationQualifiedQueries(gridKeywords, resolved.DisplayName)),
+				job.Data.Depth,
+				job.Data.Email,
+				resolved.BoundingBox,
+				cellKm,
+				job.Data.Zoom,
+				dedup,
+				exitMonitor,
+				w.cfg.ExtraReviews || job.Data.ExtraReviews,
+			)
+		}
+	} else {
+		seedJobs, err = runner.CreateSeedJobs(
+			job.Data.FastMode,
+			job.Data.Lang,
+			strings.NewReader(strings.Join(keywords, "\n")),
+			job.Data.Depth,
+			job.Data.Email,
+			coords,
+			job.Data.Zoom,
+			func() float64 {
+				if job.Data.Radius <= 0 {
+					return 10000 // 10 km
+				}
+
+				return float64(job.Data.Radius)
+			}(),
+			dedup,
+			exitMonitor,
+			w.cfg.ExtraReviews || job.Data.ExtraReviews,
+		)
+	}
+	if err != nil {
+		job.Status = web.StatusFailed
+
+		err2 := w.svc.Update(ctx, job)
+		if err2 != nil {
+			log.Printf("failed to update job status: %v", err2)
+		}
+
+		return err
+	}
+
+	mate, err := w.setupMate(ctx, outfile, job, resultFilter)
 	if err != nil {
 		job.Status = web.StatusFailed
 
@@ -168,42 +285,6 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 	}
 
 	defer mate.Close()
-
-	var coords string
-	if job.Data.Lat != "" && job.Data.Lon != "" {
-		coords = job.Data.Lat + "," + job.Data.Lon
-	}
-
-	dedup := deduper.New()
-	exitMonitor := exiter.New()
-
-	seedJobs, err := runner.CreateSeedJobs(
-		job.Data.FastMode,
-		job.Data.Lang,
-		strings.NewReader(strings.Join(job.Data.Keywords, "\n")),
-		job.Data.Depth,
-		job.Data.Email,
-		coords,
-		job.Data.Zoom,
-		func() float64 {
-			if job.Data.Radius <= 0 {
-				return 10000 // 10 km
-			}
-
-			return float64(job.Data.Radius)
-		}(),
-		dedup,
-		exitMonitor,
-		w.cfg.ExtraReviews || job.Data.ExtraReviews,
-	)
-	if err != nil {
-		err2 := w.svc.Update(ctx, job)
-		if err2 != nil {
-			log.Printf("failed to update job status: %v", err2)
-		}
-
-		return err
-	}
 
 	if len(seedJobs) > 0 {
 		exitMonitor.SetSeedCount(len(seedJobs))
@@ -249,7 +330,7 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 	return w.svc.Update(ctx, job)
 }
 
-func (w *webrunner) setupMate(_ context.Context, writer io.Writer, job *web.Job) (*scrapemateapp.ScrapemateApp, error) {
+func (w *webrunner) setupMate(_ context.Context, writer io.Writer, job *web.Job, filter *grid.BoundingBox) (*scrapemateapp.ScrapemateApp, error) {
 	opts := []func(*scrapemateapp.Config) error{
 		scrapemateapp.WithConcurrency(w.cfg.Concurrency),
 		scrapemateapp.WithExitOnInactivity(time.Minute * 3),
@@ -286,7 +367,7 @@ func (w *webrunner) setupMate(_ context.Context, writer io.Writer, job *web.Job)
 
 	log.Printf("job %s has proxy: %v", job.ID, hasProxy)
 
-	csvWriter := csvwriter.NewCsvWriter(csv.NewWriter(writer))
+	csvWriter := newCSVWriter(csv.NewWriter(writer), filter)
 
 	writers := []scrapemate.ResultWriter{csvWriter}
 
@@ -299,4 +380,99 @@ func (w *webrunner) setupMate(_ context.Context, writer io.Writer, job *web.Job)
 	}
 
 	return scrapemateapp.NewScrapeMateApp(matecfg)
+}
+
+func countryFromCities(ctx context.Context, resolved geocode.Result) (geodata.Country, error) {
+	store, err := geodata.OpenCityStore(cityDatabasePath)
+	if err != nil {
+		return geodata.Country{}, err
+	}
+	defer store.Close()
+
+	country, err := geodata.CountryFromCityStore(
+		ctx,
+		store,
+		resolved.CountryCode,
+		resolved.DisplayName,
+		resolved.BoundingBox,
+		defaultCityLimit,
+	)
+	if err != nil {
+		return geodata.Country{}, err
+	}
+
+	if len(country.Areas) == 0 {
+		return geodata.Country{}, fmt.Errorf("no cities found for country code %s", resolved.CountryCode)
+	}
+
+	return country, nil
+}
+
+func createCountrySeedJobs(
+	job *web.Job,
+	country geodata.Country,
+	dedup deduper.Deduper,
+	exitMonitor exiter.Exiter,
+	extraReviews bool,
+) ([]scrapemate.IJob, error) {
+	langCode := langForLocation(job.Data.Lang, country.DisplayName)
+	countryKeywords := searchterms.ExpandForLocation(job.Data.Keywords, country.DisplayName)
+	log.Printf("job %s using maximum coverage plan for %q with %d city areas", job.ID, country.DisplayName, len(country.Areas))
+
+	var seedJobs []scrapemate.IJob
+	for _, area := range country.Areas {
+		areaJobs, err := runner.CreateGridSeedJobs(
+			langCode,
+			strings.NewReader(locationQualifiedQueries(countryKeywords, area.Name)),
+			job.Data.Depth,
+			job.Data.Email,
+			area.BBox,
+			area.CellKm,
+			job.Data.Zoom,
+			dedup,
+			exitMonitor,
+			extraReviews || job.Data.ExtraReviews,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		seedJobs = append(seedJobs, areaJobs...)
+	}
+
+	return seedJobs, nil
+}
+
+func gridCellSizeFor(bbox grid.BoundingBox) float64 {
+	cellKm := 1.0
+
+	for grid.EstimateCellCount(bbox, cellKm) > 500 {
+		cellKm *= 2
+	}
+
+	return cellKm
+}
+
+func locationQualifiedQueries(keywords []string, location string) string {
+	var queries []string
+
+	location = strings.TrimSpace(location)
+	for _, keyword := range keywords {
+		keyword = strings.TrimSpace(keyword)
+		if keyword == "" {
+			continue
+		}
+
+		queries = append(queries, keyword+" "+location)
+	}
+
+	return strings.Join(queries, "\n")
+}
+
+func langForLocation(currentLang, location string) string {
+	if searchterms.IsForeignLocation(location) {
+		return "en"
+	}
+
+	return currentLang
 }

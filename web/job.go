@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"time"
+	"unicode"
 )
 
 var jobs []Job
@@ -62,6 +63,7 @@ func (j *Job) Validate() error {
 
 type JobData struct {
 	Keywords     []string      `json:"keywords"`
+	Location     string        `json:"location"`
 	Lang         string        `json:"lang"`
 	Zoom         int           `json:"zoom"`
 	Lat          string        `json:"lat"`
@@ -73,6 +75,14 @@ type JobData struct {
 	ExtraReviews bool          `json:"extra_reviews"`
 	MaxTime      time.Duration `json:"max_time"`
 	Proxies      []string      `json:"proxies"`
+}
+
+func (d *JobData) SetDefaultLang() {
+	if d.Lang != "" {
+		return
+	}
+
+	d.Lang = inferLangFromKeywords(d.Keywords)
 }
 
 func (d *JobData) Validate() error {
@@ -101,4 +111,16 @@ func (d *JobData) Validate() error {
 	}
 
 	return nil
+}
+
+func inferLangFromKeywords(keywords []string) string {
+	for _, keyword := range keywords {
+		for _, r := range keyword {
+			if unicode.In(r, unicode.Han) {
+				return "zh"
+			}
+		}
+	}
+
+	return "en"
 }

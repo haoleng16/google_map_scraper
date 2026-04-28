@@ -60,53 +60,14 @@
                             <textarea id="keywords" name="keywords" rows="10">{{ .KeywordsString }}</textarea>
                         </div>
                         <div class="form-group">
-                            <label for="lang">语言：</label>
-                            <input type="text" id="lang" name="lang" value="{{.Language}}">
+                            <label for="location">地区（城市或国家）：</label>
+                            <input type="text" id="location" name="location" value="{{.Location}}" placeholder="例如：上海、中国、New Delhi、India">
                         </div>
                     </fieldset>
-                    
-                    <details class="expandable-section">
-                        <summary>位置设置</summary>
-                        <fieldset>
-                            <div class="form-group">
-                                <label for="zoom">缩放级别：</label>
-                                <input type="number" id="zoom" name="zoom" value="{{.Zoom}}">
-                                <a href="#" class="help-toggle" onclick="toggleHelp(event,'zoom-help')">参数说明</a>
-                                <div id="zoom-help" class="help-panel" style="display:none">
-                                    <table class="help-table">
-                                        <thead><tr><th>级别</th><th>覆盖范围</th><th>适合场景</th></tr></thead>
-                                        <tbody>
-                                            <tr><td>5 - 9</td><td>省 / 城市</td><td>搜一个大区域</td></tr>
-                                            <tr><td>10 - 12</td><td>区 / 街道</td><td>搜一个城市</td></tr>
-                                            <tr><td>13 - 15</td><td>街区</td><td>搜一个片区（默认 15）</td></tr>
-                                            <tr><td>16 - 18</td><td>单条街</td><td>精确搜索</td></tr>
-                                            <tr><td>19 - 21</td><td>建筑物级</td><td>最精细</td></tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label for="latitude">纬度：</label>
-                                <input type="number" step="0.000000000000001" id="latitude" name="latitude" value="{{.Lat}}">
-                            </div>
-                            <div class="form-group">
-                                <label for="longitude">经度：</label>
-                                <input type="number" step="0.000000000000001" id="longitude" name="longitude" value="{{.Lon}}">
-                            </div>
-                        </fieldset>
-                    </details>
-                    
+
                     <details class="expandable-section">
                         <summary>高级选项</summary>
                         <fieldset>
-                            <div class="form-group">
-                                <label for="fastmode">快速模式 (测试版)：</label>
-                                <input type="checkbox" id="fastmode" name="fastmode" {{if .FastMode}}checked{{end}}>
-                            </div>
-                            <div class="form-group">
-                                    <label for="radius">搜索半径 (测试版，单位：米，默认 10000 即 10km)：</label>
-                                    <input type="number" id="radius" name="radius" value="{{.Radius}}">
-                            </div>
                             <div class="form-group">
                                 <label for="depth">搜索深度：</label>
                                 <input type="number" step="1" id="depth" name="depth" value="{{.Depth}}">

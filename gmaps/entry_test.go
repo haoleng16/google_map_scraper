@@ -217,3 +217,24 @@ func Test_EntryFromJsonC(t *testing.T) {
 		fmt.Printf("%+v\n", entry)
 	}
 }
+
+func TestEntryCSVHeadersUseChineseNames(t *testing.T) {
+	entry := &gmaps.Entry{}
+
+	headers := entry.CsvHeaders()
+
+	require.Equal(t, []string{
+		"网站",
+		"商家名称",
+		"分类",
+		"地址",
+		"营业时间",
+		"电话",
+		"评论数量",
+		"评分",
+		"纬度",
+		"经度",
+		"邮箱",
+	}, headers)
+	require.Len(t, headers, len(entry.CsvRow()))
+}
