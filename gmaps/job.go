@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,6 +19,8 @@ import (
 )
 
 type GmapJobOptions func(*GmapJob)
+
+var mapsPlaceCoordinatesRe = regexp.MustCompile(`!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)`)
 
 type GmapJob struct {
 	scrapemate.Job
@@ -104,7 +108,7 @@ func WithWriterManagedCompletion() GmapJobOptions {
 }
 
 func (j *GmapJob) UseInResults() bool {
-	return false
+	return true
 }
 
 func (j *GmapJob) ProcessOnFetchError() bool {
@@ -137,49 +141,102 @@ func (j *GmapJob) Process(ctx context.Context, resp *scrapemate.Response) (any, 
 	}
 
 	var next []scrapemate.IJob
+	var candidates []*Entry
 
 	if strings.Contains(resp.URL, "/maps/place/") {
-		jopts := []PlaceJobOptions{}
-		if j.ExitMonitor != nil {
-			jopts = append(jopts, WithPlaceJobExitMonitor(j.ExitMonitor))
+		cfg := newPlaceJobConfig(j.ID, j.LangCode, j.ExtractEmail, j.ExtractExtraReviews)
+		cfg.exitMonitor = j.ExitMonitor
+		cfg.writerManaged = j.WriterManagedCompletion
+		_, placeJob := newPlaceJobChain(cfg, []placeFollowup{{URL: resp.URL}})
+		if placeJob != nil {
+			next = append(next, placeJob)
 		}
-
-		if j.WriterManagedCompletion {
-			jopts = append(jopts, WithPlaceJobWriterManagedCompletion())
-		}
-
-		placeJob := NewPlaceJob(j.ID, j.LangCode, resp.URL, j.ExtractEmail, j.ExtractExtraReviews, jopts...)
-
-		next = append(next, placeJob)
 	} else {
+		var followups []placeFollowup
 		doc.Find(`div[role=feed] div[jsaction]>a`).Each(func(_ int, s *goquery.Selection) {
 			if href := s.AttrOr("href", ""); href != "" {
-				jopts := []PlaceJobOptions{}
-				if j.ExitMonitor != nil {
-					jopts = append(jopts, WithPlaceJobExitMonitor(j.ExitMonitor))
-				}
-
-				if j.WriterManagedCompletion {
-					jopts = append(jopts, WithPlaceJobWriterManagedCompletion())
-				}
-
-				nextJob := NewPlaceJob(j.ID, j.LangCode, href, j.ExtractEmail, j.ExtractExtraReviews, jopts...)
-
 				if j.Deduper == nil || j.Deduper.AddIfNotExists(ctx, href) {
-					next = append(next, nextJob)
+					followups = append(followups, placeFollowup{
+						URL:       href,
+						Candidate: searchCandidateFromAnchor(href, s),
+					})
 				}
 			}
 		})
+
+		cfg := newPlaceJobConfig(j.ID, j.LangCode, j.ExtractEmail, j.ExtractExtraReviews)
+		cfg.exitMonitor = j.ExitMonitor
+		cfg.writerManaged = j.WriterManagedCompletion
+		candidate, placeJob := newPlaceJobChain(cfg, followups)
+		if candidate != nil {
+			candidates = append(candidates, candidate)
+		}
+		if placeJob != nil {
+			next = append(next, placeJob)
+		}
 	}
 
 	if j.ExitMonitor != nil {
-		j.ExitMonitor.IncrPlacesFound(len(next))
+		j.ExitMonitor.IncrPlacesFound(totalPlaceJobs(next))
 		j.ExitMonitor.IncrSeedCompleted(1)
 	}
 
-	log.Info(fmt.Sprintf("%d places found", len(next)))
+	log.Info(fmt.Sprintf("%d places found", totalPlaceJobs(next)))
 
-	return nil, next, nil
+	return candidates, next, nil
+}
+
+func totalPlaceJobs(next []scrapemate.IJob) int {
+	total := len(next)
+	if len(next) == 1 {
+		if placeJob, ok := next[0].(*PlaceJob); ok {
+			total = 1 + len(placeJob.NextPlaces)
+		}
+	}
+
+	return total
+}
+
+func searchCandidateFromAnchor(href string, s *goquery.Selection) *Entry {
+	entry := Entry{
+		Link:  href,
+		Title: strings.TrimSpace(s.AttrOr("aria-label", "")),
+	}
+
+	if entry.Title == "" {
+		entry.Title = strings.TrimSpace(s.AttrOr("title", ""))
+	}
+
+	if entry.Title == "" {
+		entry.Title = strings.TrimSpace(s.Text())
+	}
+
+	lat, lon, ok := coordinatesFromMapsURL(href)
+	if ok {
+		entry.Latitude = lat
+		entry.Longtitude = lon
+	}
+
+	return &entry
+}
+
+func coordinatesFromMapsURL(value string) (float64, float64, bool) {
+	matches := mapsPlaceCoordinatesRe.FindStringSubmatch(value)
+	if len(matches) != 3 {
+		return 0, 0, false
+	}
+
+	lat, err := strconv.ParseFloat(matches[1], 64)
+	if err != nil {
+		return 0, 0, false
+	}
+
+	lon, err := strconv.ParseFloat(matches[2], 64)
+	if err != nil {
+		return 0, 0, false
+	}
+
+	return lat, lon, true
 }
 
 func (j *GmapJob) BrowserActions(ctx context.Context, page scrapemate.BrowserPage) scrapemate.Response {

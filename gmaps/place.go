@@ -19,6 +19,9 @@ type PlaceJob struct {
 
 	UsageInResultststs      bool
 	ExtractEmail            bool
+	LangCode                string
+	SearchCandidate         *Entry
+	NextPlaces              []placeFollowup
 	ExitMonitor             exiter.Exiter
 	ExtractExtraReviews     bool
 	WriterManagedCompletion bool
@@ -45,6 +48,7 @@ func NewPlaceJob(parentID, langCode, u string, extractEmail, extraExtraReviews b
 	job.UsageInResultststs = true
 	job.ExtractEmail = extractEmail
 	job.ExtractExtraReviews = extraExtraReviews
+	job.LangCode = langCode
 
 	for _, opt := range opts {
 		opt(&job)
@@ -81,7 +85,7 @@ func (j *PlaceJob) Process(_ context.Context, resp *scrapemate.Response) (any, [
 			j.ExitMonitor.IncrPlacesCompleted(1)
 		}
 
-		return nil, nil, resp.Error
+		return j.SearchCandidate, j.nextPlaceJobs(), nil
 	}
 
 	raw, ok := resp.Meta["json"].([]byte)
@@ -90,7 +94,7 @@ func (j *PlaceJob) Process(_ context.Context, resp *scrapemate.Response) (any, [
 			j.ExitMonitor.IncrPlacesCompleted(1)
 		}
 
-		return nil, nil, fmt.Errorf("could not convert to []byte")
+		return j.SearchCandidate, j.nextPlaceJobs(), nil
 	}
 
 	entry, err := EntryFromJSON(raw)
@@ -99,7 +103,7 @@ func (j *PlaceJob) Process(_ context.Context, resp *scrapemate.Response) (any, [
 			j.ExitMonitor.IncrPlacesCompleted(1)
 		}
 
-		return nil, nil, err
+		return j.SearchCandidate, j.nextPlaceJobs(), nil
 	}
 
 	entry.ID = j.ParentID
@@ -132,6 +136,11 @@ func (j *PlaceJob) Process(_ context.Context, resp *scrapemate.Response) (any, [
 		}
 
 		emailJob := NewEmailJob(j.ID, &entry, opts...)
+		emailJob.RootParentID = j.ParentID
+		emailJob.LangCode = j.LangCode
+		emailJob.ExtractEmail = j.ExtractEmail
+		emailJob.ExtractExtraReviews = j.ExtractExtraReviews
+		emailJob.NextPlaces = append([]placeFollowup(nil), j.NextPlaces...)
 
 		j.UsageInResultststs = false
 
@@ -140,7 +149,20 @@ func (j *PlaceJob) Process(_ context.Context, resp *scrapemate.Response) (any, [
 		j.ExitMonitor.IncrPlacesCompleted(1)
 	}
 
-	return &entry, nil, err
+	return &entry, j.nextPlaceJobs(), err
+}
+
+func (j *PlaceJob) nextPlaceJobs() []scrapemate.IJob {
+	cfg := newPlaceJobConfig(j.ParentID, j.LangCode, j.ExtractEmail, j.ExtractExtraReviews)
+	cfg.exitMonitor = j.ExitMonitor
+	cfg.writerManaged = j.WriterManagedCompletion
+
+	_, next := newPlaceJobChain(cfg, j.NextPlaces)
+	if next == nil {
+		return nil
+	}
+
+	return []scrapemate.IJob{next}
 }
 
 func (j *PlaceJob) BrowserActions(ctx context.Context, page scrapemate.BrowserPage) scrapemate.Response {

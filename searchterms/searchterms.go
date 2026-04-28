@@ -30,6 +30,31 @@ var zhBusinessTerms = map[string][]string{
 	"房产中介": {"real estate agency"},
 }
 
+var zhBusinessTermOrder = []string{
+	"手机维修",
+	"手机店",
+	"餐厅",
+	"饭店",
+	"酒店",
+	"咖啡店",
+	"牙科",
+	"牙医",
+	"医院",
+	"药店",
+	"超市",
+	"便利店",
+	"理发店",
+	"美容院",
+	"健身房",
+	"学校",
+	"律师",
+	"会计",
+	"宠物店",
+	"汽车维修",
+	"汽修",
+	"房产中介",
+}
+
 func Expand(keywords []string) []string {
 	seen := make(map[string]struct{})
 	var expanded []string
@@ -89,13 +114,17 @@ func translateChineseKeyword(keyword string) []string {
 		return translated
 	}
 
-	for zh, translated := range zhBusinessTerms {
+	seen := make(map[string]struct{})
+	var translations []string
+	for _, zh := range zhBusinessTermOrder {
 		if strings.Contains(keyword, zh) {
-			return translated
+			for _, translated := range zhBusinessTerms[zh] {
+				addUnique(&translations, seen, translated)
+			}
 		}
 	}
 
-	return nil
+	return translations
 }
 
 func addUnique(values *[]string, seen map[string]struct{}, value string) {

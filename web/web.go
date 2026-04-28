@@ -62,6 +62,11 @@ func New(svc *Service, addr string) (*Server, error) {
 
 		ans.delete(w, r)
 	})
+	mux.HandleFunc("/interrupt", func(w http.ResponseWriter, r *http.Request) {
+		r = requestWithID(r)
+
+		ans.interrupt(w, r)
+	})
 	mux.HandleFunc("/jobs", ans.getJobs)
 	mux.HandleFunc("/", ans.index)
 
@@ -179,6 +184,15 @@ type formData struct {
 	Proxies  []string
 }
 
+type jobRowView struct {
+	Job
+	MatchCount  int
+	DisplayDate string
+	CanDownload bool
+}
+
+var beijingLocation = time.FixedZone("CST", 8*60*60)
+
 type ctxKey string
 
 const idCtxKey ctxKey = "id"
@@ -238,7 +252,7 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 		Lat:      "0",
 		Lon:      "0",
 		Depth:    10,
-		Email:    false,
+		Email:    true,
 	}
 
 	_ = tmpl.Execute(w, data)
@@ -331,7 +345,7 @@ func (s *Server) scrape(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newJob.Data.Email = r.Form.Get("email") == "on"
+	newJob.Data.Email = true
 
 	proxies := strings.Split(r.Form.Get("proxies"), "\n")
 	if len(proxies) > 0 {
@@ -366,7 +380,7 @@ func (s *Server) scrape(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = tmpl.Execute(w, newJob)
+	_ = tmpl.Execute(w, newJobRowView(newJob, 0))
 }
 
 func (s *Server) getJobs(w http.ResponseWriter, r *http.Request) {
@@ -382,14 +396,45 @@ func (s *Server) getJobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jobs, err := s.svc.All(context.Background())
+	jobs, err := s.svc.All(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 
 		return
 	}
 
-	_ = tmpl.Execute(w, jobs)
+	rows, err := s.jobRowViews(r.Context(), jobs)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+
+		return
+	}
+
+	_ = tmpl.Execute(w, rows)
+}
+
+func (s *Server) jobRowViews(ctx context.Context, jobs []Job) ([]jobRowView, error) {
+	rows := make([]jobRowView, 0, len(jobs))
+
+	for _, job := range jobs {
+		matchCount, err := s.svc.CountCSVRows(ctx, job.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		rows = append(rows, newJobRowView(job, matchCount))
+	}
+
+	return rows, nil
+}
+
+func newJobRowView(job Job, matchCount int) jobRowView {
+	return jobRowView{
+		Job:         job,
+		MatchCount:  matchCount,
+		DisplayDate: job.Date.In(beijingLocation).Format("2006-01-02 15:04:05"),
+		CanDownload: job.Status == StatusOK || (job.Status == StatusInterrupted && matchCount > 0),
+	}
 }
 
 func (s *Server) download(w http.ResponseWriter, r *http.Request) {
@@ -462,6 +507,43 @@ func (s *Server) delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) interrupt(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+
+		return
+	}
+
+	interruptID, ok := getIDFromRequest(r)
+	if !ok {
+		http.Error(w, "Invalid ID", http.StatusUnprocessableEntity)
+
+		return
+	}
+
+	job, err := s.svc.Interrupt(r.Context(), interruptID.String())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+
+		return
+	}
+
+	matchCount, err := s.svc.CountCSVRows(r.Context(), job.ID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+
+		return
+	}
+
+	tmpl, ok := s.tmpl["static/templates/job_row.html"]
+	if !ok {
+		http.Error(w, "missing tpl", http.StatusInternalServerError)
+		return
+	}
+
+	_ = tmpl.Execute(w, newJobRowView(job, matchCount))
 }
 
 type apiError struct {

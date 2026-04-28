@@ -3,6 +3,7 @@ package gmaps
 import (
 	"context"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
@@ -13,12 +14,19 @@ import (
 	"github.com/gosom/google-maps-scraper/exiter"
 )
 
+var phoneNumberRe = regexp.MustCompile(`(?:\+?\d[\d\s().-]{7,}\d)`)
+
 type EmailExtractJobOptions func(*EmailExtractJob)
 
 type EmailExtractJob struct {
 	scrapemate.Job
 
 	Entry                   *Entry
+	RootParentID            string
+	LangCode                string
+	ExtractEmail            bool
+	ExtractExtraReviews     bool
+	NextPlaces              []placeFollowup
 	ExitMonitor             exiter.Exiter
 	WriterManagedCompletion bool
 }
@@ -79,12 +87,12 @@ func (j *EmailExtractJob) Process(ctx context.Context, resp *scrapemate.Response
 
 	// if html fetch failed just return
 	if resp.Error != nil {
-		return j.Entry, nil, nil
+		return j.Entry, j.nextPlaceJobs(), nil
 	}
 
 	doc, ok := resp.Document.(*goquery.Document)
 	if !ok {
-		return j.Entry, nil, nil
+		return j.Entry, j.nextPlaceJobs(), nil
 	}
 
 	emails := docEmailExtractor(doc)
@@ -93,12 +101,33 @@ func (j *EmailExtractJob) Process(ctx context.Context, resp *scrapemate.Response
 	}
 
 	j.Entry.Emails = emails
+	if strings.TrimSpace(j.Entry.Phone) == "" {
+		phone := docPhoneExtractor(doc)
+		if phone == "" {
+			phone = regexPhoneExtractor(resp.Body)
+		}
 
-	return j.Entry, nil, nil
+		j.Entry.Phone = phone
+	}
+
+	return j.Entry, j.nextPlaceJobs(), nil
 }
 
 func (j *EmailExtractJob) ProcessOnFetchError() bool {
 	return true
+}
+
+func (j *EmailExtractJob) nextPlaceJobs() []scrapemate.IJob {
+	cfg := newPlaceJobConfig(j.RootParentID, j.LangCode, j.ExtractEmail, j.ExtractExtraReviews)
+	cfg.exitMonitor = j.ExitMonitor
+	cfg.writerManaged = j.WriterManagedCompletion
+
+	_, next := newPlaceJobChain(cfg, j.NextPlaces)
+	if next == nil {
+		return nil
+	}
+
+	return []scrapemate.IJob{next}
 }
 
 func docEmailExtractor(doc *goquery.Document) []string {
@@ -136,6 +165,63 @@ func regexEmailExtractor(body []byte) []string {
 	}
 
 	return emails
+}
+
+func docPhoneExtractor(doc *goquery.Document) string {
+	var phone string
+
+	doc.Find("a[href^='tel:']").EachWithBreak(func(_ int, s *goquery.Selection) bool {
+		tel, exists := s.Attr("href")
+		if !exists {
+			return true
+		}
+
+		phone = cleanPhone(strings.TrimPrefix(tel, "tel:"))
+
+		return phone == ""
+	})
+
+	return phone
+}
+
+func regexPhoneExtractor(body []byte) string {
+	matches := phoneNumberRe.FindAllString(string(body), -1)
+	for _, match := range matches {
+		phone := cleanPhone(match)
+		if phone != "" {
+			return phone
+		}
+	}
+
+	return ""
+}
+
+func cleanPhone(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+
+	value = strings.TrimPrefix(value, "tel:")
+	value = strings.TrimSpace(strings.Split(value, "?")[0])
+	replacer := strings.NewReplacer(" ", "", "-", "", "(", "", ")", "", ".", "")
+	compact := replacer.Replace(value)
+	digits := 0
+	for _, r := range compact {
+		if r >= '0' && r <= '9' {
+			digits++
+			continue
+		}
+		if r != '+' {
+			return ""
+		}
+	}
+
+	if digits < 8 || digits > 15 {
+		return ""
+	}
+
+	return value
 }
 
 func getValidEmail(s string) (string, error) {

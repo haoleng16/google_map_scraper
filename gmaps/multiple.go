@@ -43,6 +43,9 @@ func ParseSearchResults(raw []byte) ([]*Entry, error) {
 		entry.ID = getNthElementAndCast[string](business, 0)
 		entry.Title = getNthElementAndCast[string](business, 11)
 		entry.Categories = toStringSlice(getNthElementAndCast[[]any](business, 13))
+		if len(entry.Categories) > 0 {
+			entry.Category = entry.Categories[0]
+		}
 		entry.WebSite = getNthElementAndCast[string](business, 7, 0)
 
 		entry.ReviewRating = getNthElementAndCast[float64](business, 4, 7)

@@ -109,6 +109,25 @@ func TestResolveKnownThailandInChinese(t *testing.T) {
 	}
 }
 
+func TestResolveKnownVietnamInChinese(t *testing.T) {
+	result, err := Resolve(context.Background(), "越南")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result.DisplayName != "Vietnam" || result.CountryCode != "VN" || !result.IsCountry {
+		t.Fatalf("unexpected Vietnam metadata: %+v", result)
+	}
+
+	if !result.BoundingBox.Contains(10.8231, 106.6297) {
+		t.Fatal("expected Vietnam bbox to contain Ho Chi Minh City")
+	}
+
+	if result.BoundingBox.Contains(13.7563, 100.5018) {
+		t.Fatal("did not expect Vietnam bbox to contain Bangkok")
+	}
+}
+
 func TestResolveCountryMetadata(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`[{

@@ -80,6 +80,7 @@ type Config struct {
 	Addr                     string
 	DisablePageReuse         bool
 	ExtraReviews             bool
+	WebWorkers               int
 	LeadsDBAPIKey            string
 
 	// Grid scraping — divide a bounding box into cells to bypass the ~120
@@ -134,6 +135,7 @@ func ParseConfig() *Config {
 	flag.StringVar(&cfg.Addr, "addr", ":8080", "address to listen on for web server")
 	flag.BoolVar(&cfg.DisablePageReuse, "disable-page-reuse", false, "disable page reuse in playwright")
 	flag.BoolVar(&cfg.ExtraReviews, "extra-reviews", false, "enable extra reviews collection")
+	flag.IntVar(&cfg.WebWorkers, "web-workers", 1, "number of web jobs to run in parallel")
 	flag.StringVar(&cfg.LeadsDBAPIKey, "leadsdb-api-key", "", "LeadsDB API key for exporting results to LeadsDB")
 	flag.StringVar(&cfg.GridBBox, "grid-bbox", "", "bounding box for grid scraping: 'minLat,minLon,maxLat,maxLon' (e.g. '40.30,-3.80,40.50,-3.60')")
 	flag.Float64Var(&cfg.GridCellKm, "grid-cell", 1.0, "grid cell size in km [default: 1.0]. Use with -grid-bbox")
@@ -189,6 +191,10 @@ func ParseConfig() *Config {
 
 	if cfg.Concurrency < 1 {
 		panic("Concurrency must be greater than 0")
+	}
+
+	if cfg.WebWorkers < 1 {
+		panic("WebWorkers must be greater than 0")
 	}
 
 	if cfg.MaxDepth < 1 {

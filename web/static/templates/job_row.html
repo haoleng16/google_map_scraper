@@ -1,13 +1,27 @@
 <tr>
     <td>{{.ID}}</td>
     <td>{{.Name}}</td>
-    <td>{{.Date}}</td>
+    <td>{{.DisplayDate}}</td>
+    <td class="match-count">
+        <strong>{{.MatchCount}}</strong>
+        {{ if eq .Status "working" }}
+            <span class="live-label">实时</span>
+        {{ end }}
+    </td>
     <td>
         <span class="status-indicator status-{{.Status}}">{{.Status}}</span>
     </td>
     <td>
-        {{ if eq .Status "ok" }}
+        {{ if .CanDownload }}
             <a href="/download?id={{.ID}}" download class="button download-button">下载</a>
+        {{ end }}
+        {{ if eq .Status "working" }}
+            <button type="button"
+                    hx-post="/interrupt?id={{.ID}}"
+                    hx-target="closest tr"
+                    hx-swap="outerHTML"
+                    hx-confirm="确定要中断这个任务吗？已写入 CSV 的数据会保留。"
+                    class="interrupt-button">中断</button>
         {{ end }}
         <button hx-delete="/delete?id={{.ID}}" 
                 hx-target="closest tr"

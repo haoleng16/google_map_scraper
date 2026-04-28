@@ -1,22 +1,28 @@
 package web
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 type Service struct {
-	repo       JobRepository
-	dataFolder string
+	repo          JobRepository
+	dataFolder    string
+	activeCancels map[string]context.CancelFunc
+	activeMu      sync.Mutex
 }
 
 func NewService(repo JobRepository, dataFolder string) *Service {
 	return &Service{
-		repo:       repo,
-		dataFolder: dataFolder,
+		repo:          repo,
+		dataFolder:    dataFolder,
+		activeCancels: make(map[string]context.CancelFunc),
 	}
 }
 
@@ -54,6 +60,54 @@ func (s *Service) Update(ctx context.Context, job *Job) error {
 	return s.repo.Update(ctx, job)
 }
 
+func (s *Service) ClaimPending(ctx context.Context) (Job, bool, error) {
+	return s.repo.ClaimPending(ctx)
+}
+
+func (s *Service) RegisterCancel(id string, cancel context.CancelFunc) {
+	if id == "" || cancel == nil {
+		return
+	}
+
+	s.activeMu.Lock()
+	defer s.activeMu.Unlock()
+
+	s.activeCancels[id] = cancel
+}
+
+func (s *Service) ClearCancel(id string) {
+	s.activeMu.Lock()
+	defer s.activeMu.Unlock()
+
+	delete(s.activeCancels, id)
+}
+
+func (s *Service) Interrupt(ctx context.Context, id string) (Job, error) {
+	job, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return Job{}, err
+	}
+
+	if job.Status != StatusPending && job.Status != StatusWorking {
+		return job, nil
+	}
+
+	job.Status = StatusInterrupted
+	if err := s.repo.Update(ctx, &job); err != nil {
+		return Job{}, err
+	}
+
+	s.activeMu.Lock()
+	cancel := s.activeCancels[id]
+	s.activeMu.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+
+	return job, nil
+}
+
 func (s *Service) SelectPending(ctx context.Context) ([]Job, error) {
 	return s.repo.Select(ctx, SelectParams{Status: StatusPending, Limit: 1})
 }
@@ -70,4 +124,44 @@ func (s *Service) GetCSV(_ context.Context, id string) (string, error) {
 	}
 
 	return datapath, nil
+}
+
+func (s *Service) CountCSVRows(_ context.Context, id string) (int, error) {
+	if strings.Contains(id, "/") || strings.Contains(id, "\\") || strings.Contains(id, "..") {
+		return 0, fmt.Errorf("invalid file name")
+	}
+
+	datapath := filepath.Join(s.dataFolder, id+".csv")
+	file, err := os.Open(datapath)
+	if os.IsNotExist(err) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	defer file.Close()
+
+	reader := bufio.NewReader(file)
+	lineCount := 0
+
+	for {
+		line, err := reader.ReadString('\n')
+		if len(line) > 0 {
+			lineCount++
+		}
+		if err == nil {
+			continue
+		}
+		if err == io.EOF {
+			break
+		}
+
+		return 0, err
+	}
+
+	if lineCount == 0 {
+		return 0, nil
+	}
+
+	return lineCount - 1, nil
 }

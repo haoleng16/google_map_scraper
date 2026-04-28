@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
+	"github.com/gosom/google-maps-scraper/grid"
 	_ "modernc.org/sqlite"
 )
 
@@ -22,6 +24,15 @@ type City struct {
 
 type CityStore struct {
 	db *sql.DB
+}
+
+type CountryRecord struct {
+	Code       string
+	Name       string
+	Capital    string
+	AreaSqKm   float64
+	Population int64
+	BBox       grid.BoundingBox
 }
 
 func OpenCityStore(path string) (*CityStore, error) {
@@ -80,4 +91,44 @@ func (s *CityStore) TopCities(ctx context.Context, countryCode string, limit int
 	}
 
 	return cities, rows.Err()
+}
+
+func (s *CityStore) ResolveCountry(ctx context.Context, location string) (CountryRecord, bool, error) {
+	alias := normalizeCountryAlias(location)
+	if alias == "" {
+		return CountryRecord{}, false, nil
+	}
+
+	row := s.db.QueryRowContext(ctx, `
+		SELECT c.country_code, c.name, c.capital, c.area_sq_km, c.population,
+			c.min_lat, c.min_lon, c.max_lat, c.max_lon
+		FROM country_aliases a
+		JOIN countries c ON c.country_code = a.country_code
+		WHERE a.alias = ?
+	`, alias)
+
+	var country CountryRecord
+	err := row.Scan(
+		&country.Code,
+		&country.Name,
+		&country.Capital,
+		&country.AreaSqKm,
+		&country.Population,
+		&country.BBox.MinLat,
+		&country.BBox.MinLon,
+		&country.BBox.MaxLat,
+		&country.BBox.MaxLon,
+	)
+	if err == nil {
+		return country, true, nil
+	}
+	if err != sql.ErrNoRows {
+		return CountryRecord{}, false, err
+	}
+
+	return CountryRecord{}, false, nil
+}
+
+func normalizeCountryAlias(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
 }

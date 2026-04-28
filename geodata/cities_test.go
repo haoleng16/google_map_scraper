@@ -109,6 +109,64 @@ func TestCountryFromCityStore(t *testing.T) {
 	}
 }
 
+func TestCityStoreResolveCountry(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "cities.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = db.Exec(`
+		CREATE TABLE countries (
+			country_code TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			capital TEXT,
+			area_sq_km REAL,
+			population INTEGER,
+			min_lat REAL NOT NULL,
+			min_lon REAL NOT NULL,
+			max_lat REAL NOT NULL,
+			max_lon REAL NOT NULL
+		);
+		CREATE TABLE country_aliases (
+			alias TEXT PRIMARY KEY,
+			country_code TEXT NOT NULL
+		);
+		INSERT INTO countries VALUES ('VN', 'Vietnam', 'Hanoi', 331212, 97338579, 8.0, 102.0, 23.5, 110.0);
+		INSERT INTO country_aliases VALUES ('越南', 'VN'), ('vietnam', 'VN');
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err := OpenCityStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	country, ok, err := store.ResolveCountry(context.Background(), "越南")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !ok {
+		t.Fatal("expected country to resolve")
+	}
+
+	if country.Code != "VN" || country.Name != "Vietnam" {
+		t.Fatalf("unexpected country: %+v", country)
+	}
+
+	if !country.BBox.Contains(10.8231, 106.6297) {
+		t.Fatal("expected Vietnam bbox to contain Ho Chi Minh City")
+	}
+}
+
 func boundingBoxGermany() grid.BoundingBox {
 	return grid.BoundingBox{
 		MinLat: 47.270,

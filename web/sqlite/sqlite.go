@@ -56,6 +56,53 @@ func (repo *repo) Delete(ctx context.Context, id string) error {
 	return err
 }
 
+func (repo *repo) ClaimPending(ctx context.Context) (web.Job, bool, error) {
+	tx, err := repo.db.BeginTx(ctx, nil)
+	if err != nil {
+		return web.Job{}, false, err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	row := tx.QueryRowContext(ctx, `
+		SELECT * FROM jobs
+		WHERE status = ?
+		ORDER BY created_at DESC
+		LIMIT 1
+	`, web.StatusPending)
+
+	job, err := rowToJob(row)
+	if err == sql.ErrNoRows {
+		return web.Job{}, false, nil
+	}
+	if err != nil {
+		return web.Job{}, false, err
+	}
+
+	const q = `UPDATE jobs SET status = ?, updated_at = ? WHERE id = ? AND status = ?`
+	result, err := tx.ExecContext(ctx, q, web.StatusWorking, time.Now().UTC().Unix(), job.ID, web.StatusPending)
+	if err != nil {
+		return web.Job{}, false, err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return web.Job{}, false, err
+	}
+	if affected == 0 {
+		return web.Job{}, false, nil
+	}
+
+	if err := tx.Commit(); err != nil {
+		return web.Job{}, false, err
+	}
+
+	job.Status = web.StatusWorking
+
+	return job, true, nil
+}
+
 func (repo *repo) Select(ctx context.Context, params web.SelectParams) ([]web.Job, error) {
 	q := `SELECT * from jobs`
 

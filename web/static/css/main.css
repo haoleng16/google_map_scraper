@@ -445,6 +445,19 @@ tbody tr:hover {
     background: var(--surface-2);
 }
 
+.match-count strong {
+    font-size: var(--fs-base);
+    font-weight: 700;
+    color: var(--text);
+}
+
+.live-label {
+    display: inline-block;
+    margin-left: var(--sp-xs);
+    font-size: 11px;
+    color: var(--action);
+}
+
 /* --- 状态标签 — 无圆角药丸，纯文字色 --- */
 .status-indicator {
     display: inline-block;
@@ -457,6 +470,11 @@ tbody tr:hover {
 
 .status-ok {
     color: var(--ok);
+    background: transparent;
+}
+
+.status-interrupted {
+    color: var(--action);
     background: transparent;
 }
 
@@ -474,6 +492,7 @@ tbody tr:hover {
 
 /* --- 操作按钮 --- */
 .download-button,
+.interrupt-button,
 .delete-button {
     padding: var(--sp-xs) var(--sp-sm);
     font-size: var(--fs-sm);
@@ -491,6 +510,17 @@ tbody tr:hover {
     background: var(--ok);
     color: #fff;
     border-color: var(--ok);
+}
+
+.interrupt-button {
+    border-color: var(--warn);
+    color: var(--warn);
+}
+
+.interrupt-button:hover {
+    background: var(--warn);
+    color: #fff;
+    border-color: var(--warn);
 }
 
 .delete-button {

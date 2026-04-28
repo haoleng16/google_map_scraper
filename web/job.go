@@ -10,10 +10,11 @@ import (
 var jobs []Job
 
 const (
-	StatusPending = "pending"
-	StatusWorking = "working"
-	StatusOK      = "ok"
-	StatusFailed  = "failed"
+	StatusPending     = "pending"
+	StatusWorking     = "working"
+	StatusOK          = "ok"
+	StatusFailed      = "failed"
+	StatusInterrupted = "interrupted"
 )
 
 type SelectParams struct {
@@ -25,6 +26,7 @@ type JobRepository interface {
 	Get(context.Context, string) (Job, error)
 	Create(context.Context, *Job) error
 	Delete(context.Context, string) error
+	ClaimPending(context.Context) (Job, bool, error)
 	Select(context.Context, SelectParams) ([]Job, error)
 	Update(context.Context, *Job) error
 }

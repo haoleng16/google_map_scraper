@@ -84,10 +84,6 @@
                                     </table>
                                 </div>
                             </div>
-                            <div class="form-group checkbox">
-                                <input type="checkbox" id="email" name="email" {{if .Email}}checked{{end}}>
-                                <label for="email">提取邮箱</label>
-                            </div>
                             <div class="form-group">
                                 <label for="maxtime">最大任务时间：</label>
                                 <input type="text" id="maxtime" name="maxtime" value="{{.MaxTime}}">
@@ -121,11 +117,12 @@
                             <th>任务 ID</th>
                             <th>任务名称</th>
                             <th>创建时间</th>
+                            <th>实时匹配数量</th>
                             <th>状态</th>
                             <th>操作</th>
                         </tr>
                     </thead>
-                    <tbody hx-get="/jobs" hx-trigger="load, every 10s">
+                    <tbody hx-get="/jobs" hx-trigger="load, every 5s">
                         <!-- Job rows will be inserted here by HTMX -->
                     </tbody>
                 </table>

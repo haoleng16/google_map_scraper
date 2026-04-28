@@ -49,3 +49,12 @@ func TestExpandForChinaKeepsChineseTerms(t *testing.T) {
 		t.Fatalf("expected %#v, got %#v", want, got)
 	}
 }
+
+func TestExpandForForeignLocationTranslatesMultipleChineseTerms(t *testing.T) {
+	got := ExpandForLocation([]string{"泰国手机店、手机维修"}, "Thailand")
+	want := []string{"phone repair shop", "mobile phone repair", "mobile phone shop", "cell phone store"}
+
+	if !slices.Equal(got, want) {
+		t.Fatalf("expected %#v, got %#v", want, got)
+	}
+}

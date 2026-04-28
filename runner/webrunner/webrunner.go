@@ -2,7 +2,6 @@ package webrunner
 
 import (
 	"context"
-	"encoding/csv"
 	"errors"
 	"fmt"
 	"io"
@@ -75,9 +74,13 @@ func New(cfg *runner.Config) (runner.Runner, error) {
 func (w *webrunner) Run(ctx context.Context) error {
 	egroup, ctx := errgroup.WithContext(ctx)
 
-	egroup.Go(func() error {
-		return w.work(ctx)
-	})
+	workerCount := max(1, w.cfg.WebWorkers)
+	for i := range workerCount {
+		workerID := i + 1
+		egroup.Go(func() error {
+			return w.work(ctx, workerID)
+		})
+	}
 
 	egroup.Go(func() error {
 		return w.srv.Start(ctx)
@@ -90,7 +93,7 @@ func (w *webrunner) Close(context.Context) error {
 	return nil
 }
 
-func (w *webrunner) work(ctx context.Context) error {
+func (w *webrunner) work(ctx context.Context, workerID int) error {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
@@ -99,39 +102,41 @@ func (w *webrunner) work(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			jobs, err := w.svc.SelectPending(ctx)
+			job, ok, err := w.svc.ClaimPending(ctx)
 			if err != nil {
 				return err
 			}
+			if !ok {
+				continue
+			}
 
-			for i := range jobs {
-				select {
-				case <-ctx.Done():
-					return nil
-				default:
-					t0 := time.Now().UTC()
-					if err := w.scrapeJob(ctx, &jobs[i]); err != nil {
-						params := map[string]any{
-							"job_count": len(jobs[i].Data.Keywords),
-							"duration":  time.Now().UTC().Sub(t0).String(),
-							"error":     err.Error(),
-						}
-
-						evt := tlmt.NewEvent("web_runner", params)
-
-						_ = runner.Telemetry().Send(ctx, evt)
-
-						log.Printf("error scraping job %s: %v", jobs[i].ID, err)
-					} else {
-						params := map[string]any{
-							"job_count": len(jobs[i].Data.Keywords),
-							"duration":  time.Now().UTC().Sub(t0).String(),
-						}
-
-						_ = runner.Telemetry().Send(ctx, tlmt.NewEvent("web_runner", params))
-
-						log.Printf("job %s scraped successfully", jobs[i].ID)
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+				t0 := time.Now().UTC()
+				log.Printf("web worker %d claimed job %s", workerID, job.ID)
+				if err := w.scrapeJob(ctx, &job); err != nil {
+					params := map[string]any{
+						"job_count": len(job.Data.Keywords),
+						"duration":  time.Now().UTC().Sub(t0).String(),
+						"error":     err.Error(),
 					}
+
+					evt := tlmt.NewEvent("web_runner", params)
+
+					_ = runner.Telemetry().Send(ctx, evt)
+
+					log.Printf("error scraping job %s on web worker %d: %v", job.ID, workerID, err)
+				} else {
+					params := map[string]any{
+						"job_count": len(job.Data.Keywords),
+						"duration":  time.Now().UTC().Sub(t0).String(),
+					}
+
+					_ = runner.Telemetry().Send(ctx, tlmt.NewEvent("web_runner", params))
+
+					log.Printf("job %s scraped successfully on web worker %d", job.ID, workerID)
 				}
 			}
 		}
@@ -139,11 +144,10 @@ func (w *webrunner) work(ctx context.Context) error {
 }
 
 func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
-	job.Status = web.StatusWorking
-
-	err := w.svc.Update(ctx, job)
-	if err != nil {
+	if interrupted, err := w.jobInterrupted(ctx, job.ID); err != nil {
 		return err
+	} else if interrupted {
+		return nil
 	}
 
 	if len(job.Data.Keywords) == 0 {
@@ -151,6 +155,11 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 
 		return w.svc.Update(ctx, job)
 	}
+
+	jobCtx, jobCancel := context.WithCancel(ctx)
+	w.svc.RegisterCancel(job.ID, jobCancel)
+	defer w.svc.ClearCancel(job.ID)
+	defer jobCancel()
 
 	outpath := filepath.Join(w.cfg.DataFolder, job.ID+".csv")
 
@@ -175,10 +184,15 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 	var seedJobs []scrapemate.IJob
 	var resultFilter *placeFilter
 	if strings.TrimSpace(job.Data.Location) != "" {
-		if country, ok := geodata.ResolveCountry(job.Data.Location); ok {
+		if country, ok, countryErr := localCountryCoverage(jobCtx, job.Data.Location); countryErr != nil {
+			log.Printf("job %s could not resolve local country %q: %v", job.ID, job.Data.Location, countryErr)
+		} else if ok {
 			seedJobs, err = createCountrySeedJobs(job, country, dedup, exitMonitor, w.cfg.ExtraReviews)
 			resultFilter = newPlaceFilter(country.BBox, country.CountryCode, country.DisplayName)
-		} else if resolved, resolveErr := geocode.Resolve(ctx, job.Data.Location); resolveErr != nil {
+		} else if country, ok := geodata.ResolveCountry(job.Data.Location); ok {
+			seedJobs, err = createCountrySeedJobs(job, country, dedup, exitMonitor, w.cfg.ExtraReviews)
+			resultFilter = newPlaceFilter(country.BBox, country.CountryCode, country.DisplayName)
+		} else if resolved, resolveErr := geocode.Resolve(jobCtx, job.Data.Location); resolveErr != nil {
 			log.Printf("job %s could not resolve location %q: %v; falling back to location-qualified search", job.ID, job.Data.Location, resolveErr)
 			fallbackKeywords := searchterms.ExpandForLocation(job.Data.Keywords, job.Data.Location)
 			langCode := langForLocation(job.Data.Lang, job.Data.Location)
@@ -196,7 +210,7 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 				w.cfg.ExtraReviews || job.Data.ExtraReviews,
 			)
 		} else if resolved.IsCountry && resolved.CountryCode != "" {
-			country, countryErr := countryFromCities(ctx, resolved)
+			country, countryErr := countryFromCities(jobCtx, resolved)
 			if countryErr != nil {
 				log.Printf("job %s could not build city coverage for %q (%s): %v; falling back to country bbox grid", job.ID, resolved.DisplayName, resolved.CountryCode, countryErr)
 				resultFilter = newPlaceFilter(resolved.BoundingBox, resolved.CountryCode, resolved.DisplayName)
@@ -262,6 +276,10 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 		)
 	}
 	if err != nil {
+		if interrupted, checkErr := w.jobInterrupted(ctx, job.ID); checkErr == nil && interrupted {
+			return nil
+		}
+
 		job.Status = web.StatusFailed
 
 		err2 := w.svc.Update(ctx, job)
@@ -272,8 +290,18 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 		return err
 	}
 
+	if interrupted, checkErr := w.jobInterrupted(ctx, job.ID); checkErr != nil {
+		return checkErr
+	} else if interrupted {
+		return nil
+	}
+
 	mate, err := w.setupMate(ctx, outfile, job, resultFilter)
 	if err != nil {
+		if interrupted, checkErr := w.jobInterrupted(ctx, job.ID); checkErr == nil && interrupted {
+			return nil
+		}
+
 		job.Status = web.StatusFailed
 
 		err2 := w.svc.Update(ctx, job)
@@ -301,7 +329,7 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 
 		log.Printf("running job %s with %d seed jobs and %d allowed seconds", job.ID, len(seedJobs), allowedSeconds)
 
-		mateCtx, cancel := context.WithTimeout(ctx, time.Duration(allowedSeconds)*time.Second)
+		mateCtx, cancel := context.WithTimeout(jobCtx, time.Duration(allowedSeconds)*time.Second)
 		defer cancel()
 
 		exitMonitor.SetCancelFunc(cancel)
@@ -309,6 +337,14 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 		go exitMonitor.Run(mateCtx)
 
 		err = mate.Start(mateCtx, seedJobs...)
+		if interrupted, checkErr := w.jobInterrupted(ctx, job.ID); checkErr != nil {
+			cancel()
+			return checkErr
+		} else if interrupted {
+			cancel()
+			return nil
+		}
+
 		if err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
 			cancel()
 
@@ -325,9 +361,24 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 
 	mate.Close()
 
+	if interrupted, err := w.jobInterrupted(ctx, job.ID); err != nil {
+		return err
+	} else if interrupted {
+		return nil
+	}
+
 	job.Status = web.StatusOK
 
 	return w.svc.Update(ctx, job)
+}
+
+func (w *webrunner) jobInterrupted(ctx context.Context, id string) (bool, error) {
+	job, err := w.svc.Get(ctx, id)
+	if err != nil {
+		return false, err
+	}
+
+	return job.Status == web.StatusInterrupted, nil
 }
 
 func (w *webrunner) setupMate(_ context.Context, writer io.Writer, job *web.Job, filter *placeFilter) (*scrapemateapp.ScrapemateApp, error) {
@@ -367,7 +418,12 @@ func (w *webrunner) setupMate(_ context.Context, writer io.Writer, job *web.Job,
 
 	log.Printf("job %s has proxy: %v", job.ID, hasProxy)
 
-	csvWriter := newCSVWriter(csv.NewWriter(writer), filter)
+	csvOut, ok := writer.(csvOutput)
+	if !ok {
+		return nil, fmt.Errorf("writer does not support live CSV updates")
+	}
+
+	csvWriter := newCSVWriter(csvOut, filter)
 
 	writers := []scrapemate.ResultWriter{csvWriter}
 
@@ -380,6 +436,41 @@ func (w *webrunner) setupMate(_ context.Context, writer io.Writer, job *web.Job,
 	}
 
 	return scrapemateapp.NewScrapeMateApp(matecfg)
+}
+
+func localCountryCoverage(ctx context.Context, location string) (geodata.Country, bool, error) {
+	store, err := geodata.OpenCityStore(cityDatabasePath)
+	if err != nil {
+		return geodata.Country{}, false, err
+	}
+	defer store.Close()
+
+	record, ok, err := store.ResolveCountry(ctx, location)
+	if err != nil {
+		return geodata.Country{}, false, err
+	}
+
+	if !ok {
+		return geodata.Country{}, false, nil
+	}
+
+	country, err := geodata.CountryFromCityStore(
+		ctx,
+		store,
+		record.Code,
+		record.Name,
+		record.BBox,
+		defaultCityLimit,
+	)
+	if err != nil {
+		return geodata.Country{}, false, err
+	}
+
+	if len(country.Areas) == 0 {
+		return geodata.Country{}, false, fmt.Errorf("no cities found for country code %s", record.Code)
+	}
+
+	return country, true, nil
 }
 
 func countryFromCities(ctx context.Context, resolved geocode.Result) (geodata.Country, error) {
