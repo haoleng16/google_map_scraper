@@ -40,6 +40,12 @@ cross-compile: ## cross compiles the application
 build: ## builds the application (default: playwright)
 	go build -o bin/$(APP_NAME) .
 
+cities-db: ## downloads GeoNames cities15000 and builds geodata/cities.db
+	mkdir -p geodata/tmp
+	curl -L --retry 3 -o geodata/tmp/cities15000.zip https://download.geonames.org/export/dump/cities15000.zip
+	unzip -o geodata/tmp/cities15000.zip -d geodata/tmp
+	go run ./cmd/import-cities -input geodata/tmp/cities15000.txt -out geodata/cities.db
+
 docker: ## builds docker image with playwright (default)
 	docker build -t $(APP_NAME):$(VERSION) .
 

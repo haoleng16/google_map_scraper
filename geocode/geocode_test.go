@@ -90,6 +90,25 @@ func TestResolveKnownJapanInChinese(t *testing.T) {
 	}
 }
 
+func TestResolveKnownThailandInChinese(t *testing.T) {
+	result, err := Resolve(context.Background(), "泰国")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result.DisplayName != "Thailand" || result.CountryCode != "TH" || !result.IsCountry {
+		t.Fatalf("unexpected Thailand metadata: %+v", result)
+	}
+
+	if !result.BoundingBox.Contains(13.7563, 100.5018) {
+		t.Fatal("expected Thailand bbox to contain Bangkok")
+	}
+
+	if result.BoundingBox.Contains(1.3521, 103.8198) {
+		t.Fatal("did not expect Thailand bbox to contain Singapore")
+	}
+}
+
 func TestResolveCountryMetadata(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`[{

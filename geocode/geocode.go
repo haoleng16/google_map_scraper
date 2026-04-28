@@ -204,6 +204,39 @@ func resolveKnownLocation(location string) (Result, bool) {
 				MaxLon: 146.0,
 			},
 		},
+		"泰国": {
+			displayName: "Thailand",
+			countryCode: "TH",
+			isCountry:   true,
+			bbox: grid.BoundingBox{
+				MinLat: 5.5,
+				MinLon: 97.3,
+				MaxLat: 20.5,
+				MaxLon: 105.8,
+			},
+		},
+		"thailand": {
+			displayName: "Thailand",
+			countryCode: "TH",
+			isCountry:   true,
+			bbox: grid.BoundingBox{
+				MinLat: 5.5,
+				MinLon: 97.3,
+				MaxLat: 20.5,
+				MaxLon: 105.8,
+			},
+		},
+		"ประเทศไทย": {
+			displayName: "Thailand",
+			countryCode: "TH",
+			isCountry:   true,
+			bbox: grid.BoundingBox{
+				MinLat: 5.5,
+				MinLon: 97.3,
+				MaxLat: 20.5,
+				MaxLon: 105.8,
+			},
+		},
 	}
 
 	result, ok := known[key]

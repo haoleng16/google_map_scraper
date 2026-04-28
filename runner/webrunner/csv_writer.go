@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 
 	"github.com/gosom/google-maps-scraper/gmaps"
@@ -16,11 +17,23 @@ var _ scrapemate.ResultWriter = (*csvWriter)(nil)
 
 type csvWriter struct {
 	w      *csv.Writer
-	filter *grid.BoundingBox
+	filter *placeFilter
 	once   sync.Once
 }
 
-func newCSVWriter(w *csv.Writer, filter *grid.BoundingBox) scrapemate.ResultWriter {
+type placeFilter struct {
+	bbox           grid.BoundingBox
+	countryAliases map[string]struct{}
+}
+
+func newPlaceFilter(bbox grid.BoundingBox, countryCode, countryName string) *placeFilter {
+	return &placeFilter{
+		bbox:           bbox,
+		countryAliases: countryAliases(countryCode, countryName),
+	}
+}
+
+func newCSVWriter(w *csv.Writer, filter *placeFilter) scrapemate.ResultWriter {
 	return &csvWriter{
 		w:      w,
 		filter: filter,
@@ -68,7 +81,61 @@ func (c *csvWriter) shouldWrite(element scrapemate.CsvCapable) bool {
 		return true
 	}
 
-	return c.filter.Contains(entry.Latitude, entry.Longtitude)
+	return c.filter.matches(entry)
+}
+
+func (f *placeFilter) matches(entry *gmaps.Entry) bool {
+	if !f.bbox.Contains(entry.Latitude, entry.Longtitude) {
+		return false
+	}
+
+	if len(f.countryAliases) == 0 || strings.TrimSpace(entry.CompleteAddress.Country) == "" {
+		return true
+	}
+
+	_, ok := f.countryAliases[normalizeCountryName(entry.CompleteAddress.Country)]
+
+	return ok
+}
+
+func countryAliases(countryCode, countryName string) map[string]struct{} {
+	aliases := make(map[string]struct{})
+	addCountryAlias(aliases, countryName)
+
+	switch strings.ToUpper(strings.TrimSpace(countryCode)) {
+	case "CN":
+		addCountryAlias(aliases, "China")
+		addCountryAlias(aliases, "中国")
+	case "GB":
+		addCountryAlias(aliases, "United Kingdom")
+		addCountryAlias(aliases, "UK")
+		addCountryAlias(aliases, "Great Britain")
+		addCountryAlias(aliases, "英国")
+	case "JP":
+		addCountryAlias(aliases, "Japan")
+		addCountryAlias(aliases, "日本")
+	case "TH":
+		addCountryAlias(aliases, "Thailand")
+		addCountryAlias(aliases, "Thai")
+		addCountryAlias(aliases, "泰国")
+		addCountryAlias(aliases, "ไทย")
+		addCountryAlias(aliases, "ประเทศไทย")
+	}
+
+	return aliases
+}
+
+func addCountryAlias(aliases map[string]struct{}, value string) {
+	value = normalizeCountryName(value)
+	if value == "" {
+		return
+	}
+
+	aliases[value] = struct{}{}
+}
+
+func normalizeCountryName(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
 }
 
 func csvCapableElements(data any) ([]scrapemate.CsvCapable, error) {

@@ -29,7 +29,7 @@ import (
 
 const (
 	cityDatabasePath = "geodata/cities.db"
-	defaultCityLimit = 80
+	defaultCityLimit = 120
 )
 
 type webrunner struct {
@@ -173,11 +173,11 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 	keywords := searchterms.Expand(job.Data.Keywords)
 
 	var seedJobs []scrapemate.IJob
-	var resultFilter *grid.BoundingBox
+	var resultFilter *placeFilter
 	if strings.TrimSpace(job.Data.Location) != "" {
 		if country, ok := geodata.ResolveCountry(job.Data.Location); ok {
 			seedJobs, err = createCountrySeedJobs(job, country, dedup, exitMonitor, w.cfg.ExtraReviews)
-			resultFilter = &country.BBox
+			resultFilter = newPlaceFilter(country.BBox, country.CountryCode, country.DisplayName)
 		} else if resolved, resolveErr := geocode.Resolve(ctx, job.Data.Location); resolveErr != nil {
 			log.Printf("job %s could not resolve location %q: %v; falling back to location-qualified search", job.ID, job.Data.Location, resolveErr)
 			fallbackKeywords := searchterms.ExpandForLocation(job.Data.Keywords, job.Data.Location)
@@ -199,7 +199,7 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 			country, countryErr := countryFromCities(ctx, resolved)
 			if countryErr != nil {
 				log.Printf("job %s could not build city coverage for %q (%s): %v; falling back to country bbox grid", job.ID, resolved.DisplayName, resolved.CountryCode, countryErr)
-				resultFilter = &resolved.BoundingBox
+				resultFilter = newPlaceFilter(resolved.BoundingBox, resolved.CountryCode, resolved.DisplayName)
 				cellKm := gridCellSizeFor(resolved.BoundingBox)
 				gridKeywords := searchterms.ExpandForLocation(job.Data.Keywords, resolved.DisplayName)
 				langCode := langForLocation(job.Data.Lang, resolved.DisplayName)
@@ -218,10 +218,10 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 				)
 			} else {
 				seedJobs, err = createCountrySeedJobs(job, country, dedup, exitMonitor, w.cfg.ExtraReviews)
-				resultFilter = &country.BBox
+				resultFilter = newPlaceFilter(country.BBox, country.CountryCode, country.DisplayName)
 			}
 		} else {
-			resultFilter = &resolved.BoundingBox
+			resultFilter = newPlaceFilter(resolved.BoundingBox, resolved.CountryCode, resolved.DisplayName)
 			cellKm := gridCellSizeFor(resolved.BoundingBox)
 			log.Printf("job %s resolved location %q to %q; grid cell %.1f km", job.ID, job.Data.Location, resolved.DisplayName, cellKm)
 			gridKeywords := searchterms.ExpandForLocation(job.Data.Keywords, resolved.DisplayName)
@@ -330,7 +330,7 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 	return w.svc.Update(ctx, job)
 }
 
-func (w *webrunner) setupMate(_ context.Context, writer io.Writer, job *web.Job, filter *grid.BoundingBox) (*scrapemateapp.ScrapemateApp, error) {
+func (w *webrunner) setupMate(_ context.Context, writer io.Writer, job *web.Job, filter *placeFilter) (*scrapemateapp.ScrapemateApp, error) {
 	opts := []func(*scrapemateapp.Config) error{
 		scrapemateapp.WithConcurrency(w.cfg.Concurrency),
 		scrapemateapp.WithExitOnInactivity(time.Minute * 3),
