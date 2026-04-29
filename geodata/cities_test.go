@@ -3,7 +3,9 @@ package geodata
 import (
 	"context"
 	"database/sql"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gosom/google-maps-scraper/grid"
@@ -164,6 +166,46 @@ func TestCityStoreResolveCountry(t *testing.T) {
 
 	if !country.BBox.Contains(10.8231, 106.6297) {
 		t.Fatal("expected Vietnam bbox to contain Ho Chi Minh City")
+	}
+}
+
+func TestResolveCityDatabasePathReturnsExistingPath(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "cities.db")
+	if err := os.WriteFile(dbPath, []byte("sqlite placeholder"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := ResolveCityDatabasePath(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got != dbPath {
+		t.Fatalf("expected %q, got %q", dbPath, got)
+	}
+}
+
+func TestResolveCityDatabasePathMissingIncludesCheckedPaths(t *testing.T) {
+	_, err := ResolveCityDatabasePath("missing/cities.db")
+	if err == nil {
+		t.Fatal("expected missing database error")
+	}
+
+	if !strings.Contains(err.Error(), "checked") {
+		t.Fatalf("expected checked paths in error, got %q", err.Error())
+	}
+}
+
+func TestSQLiteReadOnlyDSN(t *testing.T) {
+	got, err := sqliteReadOnlyDSN("/tmp/cities.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{"file:///tmp/cities.db", "immutable=1", "mode=ro"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q to contain %q", got, want)
+		}
 	}
 }
 

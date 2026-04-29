@@ -29,6 +29,7 @@ RUN export PATH=$PATH:/usr/local/go/bin:/root/go/bin \
 FROM golang:1.26.2-trixie AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
+COPY third_party/scrapemate/go.mod third_party/scrapemate/go.sum ./third_party/scrapemate/
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -ldflags="-w -s" -o /usr/bin/google-maps-scraper

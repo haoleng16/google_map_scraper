@@ -1,0 +1,6 @@
+.git
+bin
+gmapsdata
+webdata
+geodata/tmp
+*.log

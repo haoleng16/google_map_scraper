@@ -4,6 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/gosom/google-maps-scraper/grid"
@@ -36,12 +39,103 @@ type CountryRecord struct {
 }
 
 func OpenCityStore(path string) (*CityStore, error) {
-	db, err := sql.Open("sqlite", path)
+	resolvedPath, err := ResolveCityDatabasePath(path)
 	if err != nil {
 		return nil, err
 	}
 
+	dsn, err := sqliteReadOnlyDSN(resolvedPath)
+	if err != nil {
+		return nil, err
+	}
+
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("open city database %q: %w", resolvedPath, err)
+	}
+
+	if err := db.Ping(); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("open city database %q: %w", resolvedPath, err)
+	}
+
 	return &CityStore{db: db}, nil
+}
+
+func ResolveCityDatabasePath(path string) (string, error) {
+	if strings.TrimSpace(path) == "" {
+		return "", fmt.Errorf("city database path is empty")
+	}
+
+	candidates := cityDatabasePathCandidates(path)
+	for _, candidate := range candidates {
+		info, err := os.Stat(candidate)
+		if err == nil {
+			if info.IsDir() {
+				return "", fmt.Errorf("city database path %q is a directory", candidate)
+			}
+
+			return candidate, nil
+		}
+		if !os.IsNotExist(err) {
+			return "", fmt.Errorf("stat city database %q: %w", candidate, err)
+		}
+	}
+
+	return "", fmt.Errorf("city database %q not found; checked %s", path, strings.Join(candidates, ", "))
+}
+
+func cityDatabasePathCandidates(path string) []string {
+	if filepath.IsAbs(path) {
+		return []string{path}
+	}
+
+	candidates := []string{path}
+
+	if cwd, err := os.Getwd(); err == nil {
+		candidates = append(candidates, filepath.Join(cwd, path))
+	}
+
+	if exe, err := os.Executable(); err == nil {
+		candidates = append(candidates, filepath.Join(filepath.Dir(exe), path))
+		candidates = append(candidates, filepath.Join(filepath.Dir(filepath.Dir(exe)), path))
+	}
+
+	return uniquePaths(candidates)
+}
+
+func uniquePaths(paths []string) []string {
+	seen := make(map[string]struct{}, len(paths))
+	out := make([]string, 0, len(paths))
+	for _, path := range paths {
+		clean := filepath.Clean(path)
+		if _, ok := seen[clean]; ok {
+			continue
+		}
+
+		seen[clean] = struct{}{}
+		out = append(out, clean)
+	}
+
+	return out
+}
+
+func sqliteReadOnlyDSN(path string) (string, error) {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("resolve city database absolute path %q: %w", path, err)
+	}
+
+	uri := url.URL{
+		Scheme: "file",
+		Path:   absPath,
+	}
+	query := uri.Query()
+	query.Set("mode", "ro")
+	query.Set("immutable", "1")
+	uri.RawQuery = query.Encode()
+
+	return uri.String(), nil
 }
 
 func (s *CityStore) Close() error {
