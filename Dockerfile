@@ -2,6 +2,8 @@
 FROM golang:1.26.2-trixie AS playwright-deps
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/browsers
 #ENV PLAYWRIGHT_DRIVER_PATH=/opt/
+ARG GOPROXY=https://goproxy.cn,direct
+ENV GOPROXY=${GOPROXY}
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl wget \
@@ -9,12 +11,14 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends nodejs \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
-    && go install github.com/playwright-community/playwright-go/cmd/playwright@latest \
+    && go install github.com/playwright-community/playwright-go/cmd/playwright@v0.5700.1 \
     && mkdir -p /opt/browsers \
     && playwright install chromium --with-deps
 
 # Build stage
 FROM golang:1.26.2-trixie AS builder
+ARG GOPROXY=https://goproxy.cn,direct
+ENV GOPROXY=${GOPROXY}
 WORKDIR /app
 COPY go.mod go.sum ./
 COPY third_party/scrapemate/go.mod third_party/scrapemate/go.sum ./third_party/scrapemate/
