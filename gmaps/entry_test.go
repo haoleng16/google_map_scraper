@@ -224,7 +224,7 @@ func TestEntryCSVHeadersUseChineseNames(t *testing.T) {
 	headers := entry.CsvHeaders()
 
 	require.Equal(t, []string{
-		"网站",
+		"地图网址",
 		"商家名称",
 		"分类",
 		"地址",
@@ -235,6 +235,20 @@ func TestEntryCSVHeadersUseChineseNames(t *testing.T) {
 		"纬度",
 		"经度",
 		"邮箱",
+		"官网",
 	}, headers)
 	require.Len(t, headers, len(entry.CsvRow()))
+}
+
+func TestEntryCSVRowIncludesOfficialWebsiteLast(t *testing.T) {
+	entry := &gmaps.Entry{
+		Link:    "https://www.google.com/maps/place/shop",
+		WebSite: "https://example.com",
+	}
+
+	row := entry.CsvRow()
+
+	require.Equal(t, "https://www.google.com/maps/place/shop", row[0])
+	require.Equal(t, "https://example.com", row[len(row)-1])
+	require.Len(t, entry.CsvHeaders(), len(row))
 }

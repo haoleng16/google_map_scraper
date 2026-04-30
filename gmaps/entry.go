@@ -158,7 +158,7 @@ func (e *Entry) Validate() error {
 
 func (e *Entry) CsvHeaders() []string {
 	return []string{
-		"网站",
+		"地图网址",
 		"商家名称",
 		"分类",
 		"地址",
@@ -169,6 +169,7 @@ func (e *Entry) CsvHeaders() []string {
 		"纬度",
 		"经度",
 		"邮箱",
+		"官网",
 	}
 }
 
@@ -185,6 +186,7 @@ func (e *Entry) CsvRow() []string {
 		stringify(e.Latitude),
 		stringify(e.Longtitude),
 		stringSliceToString(e.Emails),
+		e.WebSite,
 	}
 }
 
