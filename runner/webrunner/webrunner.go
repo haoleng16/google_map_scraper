@@ -26,10 +26,18 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const (
-	cityDatabasePath = "geodata/cities.db"
-	defaultCityLimit = 120
-)
+const defaultCityLimit = 10000
+
+var cityDatabasePath = "geodata/cities.db"
+
+// SetCityDatabasePath configures the SQLite city database used for country coverage.
+func SetCityDatabasePath(path string) {
+	if strings.TrimSpace(path) == "" {
+		return
+	}
+
+	cityDatabasePath = path
+}
 
 type webrunner struct {
 	srv *web.Server

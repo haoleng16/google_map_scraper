@@ -89,6 +89,9 @@ h1 {
 /* --- 导航 / API 文档链接 --- */
 nav {
     margin-bottom: var(--sp-md);
+    display: flex;
+    gap: var(--sp-md);
+    align-items: center;
 }
 
 nav a {
@@ -102,107 +105,6 @@ nav a {
 
 nav a:hover {
     border-bottom-color: var(--action);
-}
-
-/* --- GitHub 区域 --- */
-.github-section {
-    display: flex;
-    align-items: center;
-    gap: var(--sp-sm);
-    margin-top: var(--sp-sm);
-    font-size: var(--fs-sm);
-    color: var(--text-2);
-}
-
-.github-section p {
-    margin: 0;
-}
-
-.github-button {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--sp-xs);
-    padding: var(--sp-xs) var(--sp-sm);
-    border: 1px solid var(--border);
-    background: var(--surface);
-    color: var(--text);
-    text-decoration: none;
-    font-size: var(--fs-sm);
-    font-family: -apple-system, BlinkMacSystemFont, "Noto Sans SC", "PingFang SC", sans-serif;
-    transition: border-color 0.15s, background 0.15s;
-}
-
-.github-button:hover {
-    background: var(--surface-2);
-    border-color: var(--text-3);
-}
-
-.github-button svg {
-    width: 14px;
-    height: 14px;
-}
-
-.github-button svg path {
-    fill: var(--text-3);
-}
-
-/* --- 赞助区域 --- */
-.sponsor-section {
-    position: relative;
-    margin-top: var(--sp-md);
-    padding: var(--sp-md);
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-}
-
-.sponsor-close {
-    position: absolute;
-    top: var(--sp-xs);
-    right: var(--sp-xs);
-    width: 24px;
-    height: 24px;
-    border: none;
-    background: transparent;
-    color: var(--text-3);
-    font-size: 18px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-}
-
-.sponsor-close:hover {
-    color: var(--text);
-}
-
-.sponsor-text {
-    margin: 0 0 var(--sp-sm) 0;
-    font-size: var(--fs-sm);
-    color: var(--text-2);
-    padding-right: var(--sp-lg);
-}
-
-.sponsor-button {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--sp-xs);
-    padding: var(--sp-xs) var(--sp-sm);
-    background: var(--action);
-    color: #fff;
-    text-decoration: none;
-    font-size: var(--fs-sm);
-    font-family: -apple-system, BlinkMacSystemFont, "Noto Sans SC", "PingFang SC", sans-serif;
-    transition: background 0.15s;
-}
-
-.sponsor-button:hover {
-    background: var(--action-hover);
-}
-
-.sponsor-button svg {
-    width: 14px;
-    height: 14px;
 }
 
 /* --- 主体：侧栏 + 内容 --- */

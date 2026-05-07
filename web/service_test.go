@@ -74,6 +74,36 @@ func TestServiceInterruptMarksJobAndCancels(t *testing.T) {
 	}
 }
 
+func TestServiceDeleteCancelsActiveJob(t *testing.T) {
+	ctx := context.Background()
+	repo := &memoryJobRepo{
+		jobs: map[string]Job{
+			"job-1": {
+				ID:     "job-1",
+				Name:   "job-1",
+				Status: StatusWorking,
+			},
+		},
+	}
+	svc := NewService(repo, t.TempDir())
+
+	canceled := false
+	svc.RegisterCancel("job-1", func() {
+		canceled = true
+	})
+
+	if err := svc.Delete(ctx, "job-1"); err != nil {
+		t.Fatal(err)
+	}
+
+	if !canceled {
+		t.Fatal("expected active job cancel function to be called before delete")
+	}
+	if _, ok := repo.jobs["job-1"]; ok {
+		t.Fatal("expected job to be deleted from repository")
+	}
+}
+
 type memoryJobRepo struct {
 	jobs map[string]Job
 }

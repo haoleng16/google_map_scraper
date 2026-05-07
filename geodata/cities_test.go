@@ -169,6 +169,89 @@ func TestCityStoreResolveCountry(t *testing.T) {
 	}
 }
 
+func TestCityStoreCountriesAndStats(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "cities.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = db.Exec(`
+		CREATE TABLE countries (
+			country_code TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			capital TEXT,
+			area_sq_km REAL,
+			population INTEGER,
+			min_lat REAL NOT NULL,
+			min_lon REAL NOT NULL,
+			max_lat REAL NOT NULL,
+			max_lon REAL NOT NULL
+		);
+		CREATE TABLE cities (
+			id INTEGER PRIMARY KEY,
+			name TEXT NOT NULL,
+			ascii_name TEXT NOT NULL,
+			country_code TEXT NOT NULL,
+			admin1_code TEXT,
+			latitude REAL NOT NULL,
+			longitude REAL NOT NULL,
+			population INTEGER NOT NULL,
+			timezone TEXT
+		);
+		CREATE TABLE country_aliases (
+			alias TEXT PRIMARY KEY,
+			country_code TEXT NOT NULL
+		);
+		INSERT INTO countries VALUES
+			('VN', 'Vietnam', 'Hanoi', 331212, 97338579, 8.0, 102.0, 23.5, 110.0),
+			('JP', 'Japan', 'Tokyo', 377975, 125681593, 24.0, 122.0, 46.0, 146.0);
+		INSERT INTO cities VALUES
+			(1, 'Tokyo', 'Tokyo', 'JP', '', 35.6762, 139.6503, 9733276, 'Asia/Tokyo'),
+			(2, 'Osaka', 'Osaka', 'JP', '', 34.6937, 135.5023, 2691185, 'Asia/Tokyo'),
+			(3, 'Ho Chi Minh City', 'Ho Chi Minh City', 'VN', '', 10.8231, 106.6297, 8993082, 'Asia/Ho_Chi_Minh');
+		INSERT INTO country_aliases VALUES
+			('日本', 'JP'),
+			('日本国', 'JP'),
+			('越南', 'VN');
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err := OpenCityStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	countries, err := store.Countries(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(countries) != 2 {
+		t.Fatalf("expected 2 countries, got %d", len(countries))
+	}
+	if countries[0].Code != "JP" || countries[0].CityCount != 2 {
+		t.Fatalf("expected Japan first with 2 cities, got %+v", countries[0])
+	}
+	if countries[0].ChineseName != "日本" {
+		t.Fatalf("expected shortest Chinese country name, got %q", countries[0].ChineseName)
+	}
+
+	stats, err := store.Stats(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.CountryCount != 2 || stats.CityCount != 3 {
+		t.Fatalf("unexpected stats: %+v", stats)
+	}
+}
+
 func TestResolveCityDatabasePathReturnsExistingPath(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "cities.db")
 	if err := os.WriteFile(dbPath, []byte("sqlite placeholder"), 0o600); err != nil {

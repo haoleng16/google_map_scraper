@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>信息获取与 WhatsApp 发送</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top-bar">
+    <div class="top-bar__left">
+      <h1 class="top-bar__title">信息获取与 WhatsApp 发送</h1>
+    </div>
+    <nav class="tabs" aria-label="主导航">
+      <button class="tab tab--active" data-tab="scraperTab">信息获取</button>
+      <button class="tab" data-tab="resultsTab">结果库</button>
+      <button class="tab" data-tab="whatsappTab">WhatsApp发送</button>
+      <button class="tab" data-tab="agentTab">AI Agent</button>
+      <button class="tab" data-tab="settingsTab">设置</button>
+    </nav>
+    <div class="top-bar__right">
+      <span class="status-dot" id="statusDot"></span>
+      <span class="status-text" id="statusText">未连接</span>
+      <button class="btn btn--primary" id="loginBtn">登录 WhatsApp</button>
+      <button class="btn btn--ghost" id="logoutBtn" disabled>登出</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="tab-panel tab-panel--active" id="scraperTab">
+      <div class="page-grid page-grid--two">
+        <section class="panel">
+          <h2 class="panel__title">信息获取</h2>
+          <div class="form-stack">
+            <div class="segmented" id="scraperMode">
+              <button class="segmented__btn segmented__btn--active" data-mode="country">国家覆盖</button>
+              <button class="segmented__btn" data-mode="location">城市地区</button>
+            </div>
+            <label class="field" id="countryField">
+              <span>国家</span>
+              <select id="countrySelect"></select>
+            </label>
+            <label class="field field--hidden" id="locationField">
+              <span>城市/地区</span>
+              <input id="locationInput" type="text" placeholder="例如 Tokyo, Japan">
+            </label>
+            <label class="field">
+              <span>关键词</span>
+              <textarea id="keywordsInput" rows="7" placeholder="restaurant&#10;dentist&#10;hotel"></textarea>
+            </label>
+            <div class="action-row">
+              <button class="btn btn--primary" id="startScraperBtn">开始获取</button>
+              <button class="btn btn--danger" id="cancelScraperBtn" disabled>取消任务</button>
+              <button class="btn btn--ghost" id="refreshJobsBtn">刷新任务</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel__header">
+            <h2 class="panel__title">任务状态</h2>
+            <span class="muted" id="scraperSummary">等待开始</span>
+          </div>
+          <ul class="job-list" id="jobList"></ul>
+        </section>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="resultsTab">
+      <section class="panel panel--wide">
+        <div class="panel__header">
+          <h2 class="panel__title">结果库</h2>
+          <div class="action-row">
+            <button class="btn btn--ghost" id="searchResultsBtn">刷新</button>
+            <button class="btn btn--primary" id="importResultsBtn">导入选中任务</button>
+          </div>
+        </div>
+        <div class="filter-row">
+          <input id="resultQueryInput" type="search" placeholder="搜索商家、电话、邮箱、网站、地址">
+          <select id="resultCategorySelect" aria-label="分类筛选">
+            <option value="">全部分类</option>
+          </select>
+          <label><input id="hasPhoneFilter" type="checkbox"> 有电话</label>
+          <label><input id="hasEmailFilter" type="checkbox"> 有邮箱</label>
+          <label><input id="hasWebsiteFilter" type="checkbox"> 有网站</label>
+          <label><input id="notImportedFilter" type="checkbox"> 未导入</label>
+        </div>
+        <div class="result-task-list" id="resultTaskList"></div>
+        <div class="muted" id="resultsSummary">暂无结果</div>
+      </section>
+    </section>
+
+    <section class="tab-panel" id="whatsappTab">
+      <div class="main-grid">
+        <section class="panel panel--contacts">
+          <h2 class="panel__title">联系人列表</h2>
+
+          <div class="drop-zone" id="csvDropZone">
+            <div class="drop-zone__content">
+              <svg class="drop-zone__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+              </svg>
+              <p>拖入 CSV 文件 或 <label class="drop-zone__link">点击选择<input type="file" accept=".csv" id="csvFileInput" hidden></label></p>
+            </div>
+          </div>
+
+          <div class="contact-controls" id="contactControls" style="display:none;">
+            <span class="contact-count" id="contactCount">0 个联系人</span>
+            <div class="contact-controls__btns">
+              <button class="btn btn--small" id="selectAllBtn">全选</button>
+              <button class="btn btn--small" id="deselectAllBtn">全不选</button>
+              <button class="btn btn--small" id="invertBtn">反选</button>
+            </div>
+          </div>
+
+          <ul class="contact-list" id="contactList"></ul>
+        </section>
+
+        <section class="panel panel--messages">
+          <h2 class="panel__title">消息编排</h2>
+          <div class="message-cards" id="messageCards"></div>
+          <button class="btn btn--outline btn--add" id="addMsgBtn">+ 添加消息</button>
+          <section class="send-risk-panel" aria-label="发送保护">
+            <div class="send-risk-panel__header">
+              <span>发送保护</span>
+              <span class="muted">节流、批次休息、失败自动暂停</span>
+            </div>
+            <div class="send-risk-grid">
+              <label>联系人间隔最小秒数<input id="contactDelayMinInput" type="number" min="1" max="300" value="1"></label>
+              <label>联系人间隔最大秒数<input id="contactDelayMaxInput" type="number" min="1" max="300" value="5"></label>
+              <label>每批联系人<input id="batchSizeInput" type="number" min="1" max="500" value="20"></label>
+              <label>批次休息最小秒数<input id="batchDelayMinInput" type="number" min="1" max="3600" value="5"></label>
+              <label>批次休息最大秒数<input id="batchDelayMaxInput" type="number" min="1" max="3600" value="10"></label>
+              <label>连续失败暂停<input id="maxFailuresInput" type="number" min="1" max="100" value="5"></label>
+            </div>
+          </section>
+          <div class="send-controls">
+            <button class="btn btn--primary btn--send" id="sendBtn" disabled>发送消息</button>
+            <button class="btn btn--danger" id="stopBtn" disabled>停止发送</button>
+          </div>
+        </section>
+      </div>
+
+      <section class="progress-panel" id="progressPanel" style="display:none;">
+        <div class="progress-panel__header">
+          <h3 class="progress-panel__title">发送进度</h3>
+          <span class="progress-panel__counter" id="progressCounter">0/0</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-bar__fill" id="progressBarFill"></div>
+        </div>
+        <ul class="progress-list" id="progressList"></ul>
+      </section>
+    </section>
+
+    <section class="tab-panel" id="agentTab">
+      <div class="agent-layout">
+        <aside class="agent-sidebar">
+          <div class="agent-sidebar__header">
+            <h2 class="panel__title">对话</h2>
+            <div class="agent-controls">
+              <button class="btn btn--small btn--primary" id="agentStartBtn">启动</button>
+              <button class="btn btn--small btn--danger" id="agentStopBtn" disabled>停止</button>
+            </div>
+          </div>
+          <div class="agent-status" id="agentStatusBar">
+            <span class="status-dot" id="agentStatusDot"></span>
+            <span id="agentStatusText">未启动</span>
+          </div>
+          <ul class="agent-conv-list" id="agentConvList"></ul>
+          <div class="agent-sidebar__footer">
+            <button class="btn btn--small btn--outline" id="agentUploadDocBtn">上传文档</button>
+          </div>
+        </aside>
+
+        <main class="agent-chat">
+          <div class="agent-chat__toolbar" id="agentChatToolbar" style="display:none">
+            <span id="agentChatPhone"></span>
+            <button class="btn btn--small btn--ghost" id="agentTakeoverBtn">人工接管</button>
+            <button class="btn btn--small btn--ghost" id="agentAutoResumeBtn" style="display:none">恢复自动</button>
+          </div>
+          <div class="agent-chat__messages" id="agentChatMessages">
+            <div class="agent-chat__empty">
+              <p>选择一个对话或直接与 Agent 交流</p>
+              <div class="agent-quick-cmds">
+                <button class="btn btn--small btn--outline agent-cmd" data-cmd="今日进度">今日进度</button>
+                <button class="btn btn--small btn--outline agent-cmd" data-cmd="你有什么建议？">你有什么建议？</button>
+                <button class="btn btn--small btn--outline agent-cmd" data-cmd="知识库内容">知识库内容</button>
+              </div>
+            </div>
+          </div>
+          <div class="agent-chat__input">
+            <input type="text" id="agentChatInput" placeholder="输入消息与 Agent 对话...">
+            <button class="btn btn--primary" id="agentChatSendBtn">发送</button>
+          </div>
+        </main>
+      </div>
+
+      <section class="agent-stats-bar" id="agentStatsBar">
+        <span id="agentStatsMsg">消息: 0</span>
+        <span id="agentStatsLatency">平均响应: --</span>
+        <span id="agentStatsTokens">Token: 0</span>
+        <span id="agentStatsDocs">知识库: 0 文档</span>
+      </section>
+    </section>
+
+    <section class="tab-panel" id="settingsTab">
+      <div class="page-grid page-grid--two">
+        <section class="panel">
+          <h2 class="panel__title">环境</h2>
+          <dl class="settings-list" id="settingsStatus"></dl>
+          <div class="action-row">
+            <button class="btn btn--ghost" id="checkSettingsBtn">重新检测</button>
+            <button class="btn btn--primary" id="installBrowsersBtn">安装/修复浏览器</button>
+          </div>
+        </section>
+        <section class="panel">
+          <h2 class="panel__title">AI 模型配置</h2>
+          <p class="muted">配置 OpenAI 兼容 API（支持 DeepSeek、OpenAI、硅基流动等）</p>
+          <div class="settings-form" id="modelConfigForm">
+            <label class="settings-label">
+              <span>API Key</span>
+              <input type="password" id="modelApiKey" placeholder="sk-..." autocomplete="off">
+            </label>
+            <label class="settings-label">
+              <span>Base URL</span>
+              <input type="text" id="modelBaseUrl" placeholder="https://api.deepseek.com">
+            </label>
+            <label class="settings-label">
+              <span>模型名称</span>
+              <input type="text" id="modelModel" placeholder="deepseek-chat">
+            </label>
+            <div class="action-row">
+              <button class="btn btn--primary" id="saveModelConfigBtn">保存配置</button>
+              <span class="muted" id="modelConfigStatus"></span>
+            </div>
+          </div>
+        </section>
+        <section class="panel">
+          <h2 class="panel__title">国家城市库</h2>
+          <p class="muted">应用内置全球国家城市 SQLite；替换后会复制到 App 数据目录。</p>
+          <div class="action-row">
+            <button class="btn btn--outline" id="replaceCitiesBtn">替换 cities.db</button>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

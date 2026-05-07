@@ -1,0 +1,9 @@
+{
+  "name": "whatsapp-desktop-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'No dev server needed'",
+    "build": "echo 'No build step needed'"
+  }
+}

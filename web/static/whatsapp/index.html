@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhatsApp 批量发送</title>
+  <link rel="stylesheet" href="/static/whatsapp/style.css">
+</head>
+<body>
+  <!-- Top Bar -->
+  <header class="top-bar">
+    <div class="top-bar__left">
+      <h1 class="top-bar__title">WhatsApp 批量发送</h1>
+    </div>
+    <div class="top-bar__right">
+      <span class="status-dot" id="statusDot"></span>
+      <span class="status-text" id="statusText">未连接</span>
+      <button class="btn btn--primary" id="loginBtn">登录 WhatsApp</button>
+      <button class="btn btn--ghost" id="logoutBtn" disabled>登出</button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="main-grid">
+    <!-- Left Panel: Contacts -->
+    <section class="panel panel--contacts">
+      <h2 class="panel__title">联系人列表</h2>
+
+      <!-- CSV Drop Zone -->
+      <div class="drop-zone" id="csvDropZone">
+        <div class="drop-zone__content">
+          <svg class="drop-zone__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+          </svg>
+          <p>拖入 CSV 文件 或 <label class="drop-zone__link">点击选择<input type="file" accept=".csv" id="csvFileInput" hidden></label></p>
+        </div>
+      </div>
+
+      <!-- Contact Controls -->
+      <div class="contact-controls" id="contactControls" style="display:none;">
+        <span class="contact-count" id="contactCount">0 个联系人</span>
+        <div class="contact-controls__btns">
+          <button class="btn btn--small" id="selectAllBtn">全选</button>
+          <button class="btn btn--small" id="deselectAllBtn">全不选</button>
+          <button class="btn btn--small" id="invertBtn">反选</button>
+        </div>
+      </div>
+
+      <!-- Category Tags -->
+      <div class="tag-list" id="tagList" style="display:none;"></div>
+
+      <!-- Contact List -->
+      <ul class="contact-list" id="contactList"></ul>
+    </section>
+
+    <!-- Right Panel: Messages -->
+    <section class="panel panel--messages">
+      <h2 class="panel__title">消息编排</h2>
+
+      <!-- Message Cards Container -->
+      <div class="message-cards" id="messageCards"></div>
+
+      <!-- Add Message Button -->
+      <button class="btn btn--outline btn--add" id="addMsgBtn">+ 添加消息</button>
+
+      <!-- Send Controls -->
+      <div class="send-controls">
+        <button class="btn btn--primary btn--send" id="sendBtn" disabled>
+          发送消息
+        </button>
+        <button class="btn btn--danger" id="stopBtn" disabled>
+          停止发送
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Bottom Progress Panel -->
+  <section class="progress-panel" id="progressPanel" style="display:none;">
+    <div class="progress-panel__header">
+      <h3 class="progress-panel__title">发送进度</h3>
+      <span class="progress-panel__counter" id="progressCounter">0/0</span>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-bar__fill" id="progressBarFill"></div>
+    </div>
+    <ul class="progress-list" id="progressList"></ul>
+  </section>
+
+  <script>const apiBase = "/whatsapp/api";</script>
+  <script src="/static/whatsapp/app.js"></script>
+</body>
+</html>

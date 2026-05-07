@@ -23,15 +23,17 @@ import (
 var static embed.FS
 
 type Server struct {
-	tmpl map[string]*template.Template
-	srv  *http.Server
-	svc  *Service
+	tmpl     map[string]*template.Template
+	srv      *http.Server
+	svc      *Service
+	whatsApp *whatsAppService
 }
 
 func New(svc *Service, addr string) (*Server, error) {
 	ans := Server{
-		svc:  svc,
-		tmpl: make(map[string]*template.Template),
+		svc:      svc,
+		tmpl:     make(map[string]*template.Template),
+		whatsApp: newWhatsAppService(svc.dataFolder),
 		srv: &http.Server{
 			Addr:              addr,
 			ReadHeaderTimeout: 10 * time.Second,
@@ -51,6 +53,9 @@ func New(svc *Service, addr string) (*Server, error) {
 	mux := http.NewServeMux()
 
 	mux.Handle("/static/", http.StripPrefix("/static/", fileServer))
+	mux.HandleFunc("/whatsapp/api/", ans.whatsAppAPI)
+	mux.HandleFunc("/whatsapp", ans.whatsAppPage)
+	mux.HandleFunc("/whatsapp/", ans.whatsAppPage)
 	mux.HandleFunc("/scrape", ans.scrape)
 	mux.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
 		r = requestWithID(r)
@@ -131,6 +136,7 @@ func New(svc *Service, addr string) (*Server, error) {
 		"static/templates/job_rows.html",
 		"static/templates/job_row.html",
 		"static/templates/redoc.html",
+		"static/whatsapp/index.html",
 	}
 
 	for _, key := range tmplsKeys {
@@ -158,6 +164,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 		log.Println("server stopped")
 	}()
+	defer s.whatsApp.close()
 
 	fmt.Fprintf(os.Stderr, "visit http://localhost%s\n", s.srv.Addr)
 
@@ -256,6 +263,29 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_ = tmpl.Execute(w, data)
+}
+
+func (s *Server) whatsAppPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+
+		return
+	}
+
+	if r.URL.Path != "/whatsapp" && r.URL.Path != "/whatsapp/" {
+		http.NotFound(w, r)
+
+		return
+	}
+
+	tmpl, ok := s.tmpl["static/whatsapp/index.html"]
+	if !ok {
+		http.Error(w, "missing tpl", http.StatusInternalServerError)
+
+		return
+	}
+
+	_ = tmpl.Execute(w, nil)
 }
 
 func (s *Server) scrape(w http.ResponseWriter, r *http.Request) {

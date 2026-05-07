@@ -43,6 +43,8 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("invalid file name")
 	}
 
+	s.cancelActive(id)
+
 	datapath := filepath.Join(s.dataFolder, id+".csv")
 
 	if _, err := os.Stat(datapath); err == nil {
@@ -82,6 +84,17 @@ func (s *Service) ClearCancel(id string) {
 	delete(s.activeCancels, id)
 }
 
+func (s *Service) cancelActive(id string) {
+	s.activeMu.Lock()
+	cancel := s.activeCancels[id]
+	delete(s.activeCancels, id)
+	s.activeMu.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+}
+
 func (s *Service) Interrupt(ctx context.Context, id string) (Job, error) {
 	job, err := s.repo.Get(ctx, id)
 	if err != nil {
@@ -97,13 +110,7 @@ func (s *Service) Interrupt(ctx context.Context, id string) (Job, error) {
 		return Job{}, err
 	}
 
-	s.activeMu.Lock()
-	cancel := s.activeCancels[id]
-	s.activeMu.Unlock()
-
-	if cancel != nil {
-		cancel()
-	}
+	s.cancelActive(id)
 
 	return job, nil
 }

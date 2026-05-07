@@ -6,3 +6,23 @@ examples/examples-api/map-outputs
 examples/examples-api/**/__pycache__/
 examples/examples-api/**/*.py[cod]
 gmaps-output
+
+# OS
+.DS_Store
+
+# IDE / agent tools
+.agents/
+.superpowers/
+skills-lock.json
+
+# Database temp files
+*.db-shm
+*.db-wal
+
+# Temp directories
+geodata/tmp/
+gmapsdata/
+info_contact/
+
+# Built binary
+/whatsapp-desktop

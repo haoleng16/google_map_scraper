@@ -38,6 +38,22 @@ type CountryRecord struct {
 	BBox       grid.BoundingBox
 }
 
+// CountrySummary contains a country row with its available city coverage.
+type CountrySummary struct {
+	Code        string
+	Name        string
+	ChineseName string
+	Capital     string
+	Population  int64
+	CityCount   int
+}
+
+// CityStoreStats summarizes the bundled country and city database.
+type CityStoreStats struct {
+	CountryCount int
+	CityCount    int
+}
+
 func OpenCityStore(path string) (*CityStore, error) {
 	resolvedPath, err := ResolveCityDatabasePath(path)
 	if err != nil {
@@ -140,6 +156,62 @@ func sqliteReadOnlyDSN(path string) (string, error) {
 
 func (s *CityStore) Close() error {
 	return s.db.Close()
+}
+
+// Countries returns all countries with the number of covered cities per country.
+func (s *CityStore) Countries(ctx context.Context) ([]CountrySummary, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT c.country_code, c.name,
+			COALESCE((
+				SELECT a.alias
+				FROM country_aliases a
+				WHERE a.country_code = c.country_code
+					AND a.alias GLOB '*[一-龥]*'
+				ORDER BY length(a.alias), a.alias
+				LIMIT 1
+			), '') AS chinese_name,
+			c.capital, c.population, COUNT(ci.id) AS city_count
+		FROM countries c
+		LEFT JOIN cities ci ON ci.country_code = c.country_code
+		GROUP BY c.country_code, c.name, c.capital, c.population
+		ORDER BY c.population DESC, c.name ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var countries []CountrySummary
+	for rows.Next() {
+		var country CountrySummary
+		if err := rows.Scan(
+			&country.Code,
+			&country.Name,
+			&country.ChineseName,
+			&country.Capital,
+			&country.Population,
+			&country.CityCount,
+		); err != nil {
+			return nil, err
+		}
+
+		countries = append(countries, country)
+	}
+
+	return countries, rows.Err()
+}
+
+// Stats returns aggregate counts for the city database.
+func (s *CityStore) Stats(ctx context.Context) (CityStoreStats, error) {
+	var stats CityStoreStats
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM countries`).Scan(&stats.CountryCount); err != nil {
+		return CityStoreStats{}, err
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM cities`).Scan(&stats.CityCount); err != nil {
+		return CityStoreStats{}, err
+	}
+
+	return stats, nil
 }
 
 func (s *CityStore) TopCities(ctx context.Context, countryCode string, limit int) ([]City, error) {
